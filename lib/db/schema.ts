@@ -1,0 +1,343 @@
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  jsonb,
+  pgEnum,
+  uniqueIndex,
+  index,
+} from "drizzle-orm/pg-core";
+
+// ── Enums ──────────────────────────────────────────────
+
+export const userRoleEnum = pgEnum("user_role", [
+  "super_admin",
+  "team_admin",
+  "member",
+  "viewer",
+]);
+
+export const planEnum = pgEnum("plan", ["free", "pro", "enterprise"]);
+
+export const prospectStatusEnum = pgEnum("prospect_status", [
+  "new",
+  "researched",
+  "contacted",
+  "replied",
+  "converted",
+  "bounced",
+  "unsubscribed",
+]);
+
+export const campaignStatusEnum = pgEnum("campaign_status", [
+  "draft",
+  "active",
+  "paused",
+  "completed",
+  "archived",
+]);
+
+export const emailStatusEnum = pgEnum("email_status", [
+  "queued",
+  "sent",
+  "delivered",
+  "opened",
+  "clicked",
+  "replied",
+  "bounced",
+  "failed",
+]);
+
+export const aiProviderEnum = pgEnum("ai_provider", ["claude", "openai", "custom"]);
+
+// ── Tables ─────────────────────────────────────────────
+
+export const tenants = pgTable("tenants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  plan: planEnum("plan").default("free").notNull(),
+  apiQuota: integer("api_quota").default(100),
+  settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: varchar("email", { length: 255 }).notNull().unique(),
+    passwordHash: text("password_hash"),
+    name: varchar("name", { length: 255 }),
+    image: text("image"),
+    role: userRoleEnum("role").default("member").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    emailVerified: timestamp("email_verified"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("users_tenant_idx").on(table.tenantId),
+  })
+);
+
+// ── NextAuth required tables ───────────────────────────
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 255 }).notNull(),
+    provider: varchar("provider", { length: 255 }).notNull(),
+    providerAccountId: varchar("provider_account_id", {
+      length: 255,
+    }).notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: varchar("token_type", { length: 255 }),
+    scope: varchar("scope", { length: 255 }),
+    id_token: text("id_token"),
+    session_state: varchar("session_state", { length: 255 }),
+  },
+  (table) => ({
+    providerUnique: uniqueIndex(
+      "accounts_provider_account_id_unique"
+    ).on(table.provider, table.providerAccountId),
+  })
+);
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionToken: varchar("session_token", { length: 255 }).notNull().unique(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: timestamp("expires").notNull(),
+});
+
+export const verificationTokens = pgTable(
+  "verification_tokens",
+  {
+    identifier: varchar("identifier", { length: 255 }).notNull(),
+    token: varchar("token", { length: 255 }).notNull(),
+    expires: timestamp("expires").notNull(),
+  },
+  (table) => ({
+    compoundPk: uniqueIndex("verification_tokens_identifier_token_unique").on(
+      table.identifier,
+      table.token
+    ),
+  })
+);
+
+// ── Business tables ────────────────────────────────────
+
+export const emailTemplates = pgTable(
+  "email_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 255 }).notNull(),
+    subject: varchar("subject", { length: 500 }).notNull(),
+    body: text("body").notNull(),
+    angle: varchar("angle", { length: 100 }),
+    productName: varchar("product_name", { length: 255 }),
+    senderName: varchar("sender_name", { length: 255 }),
+    attachments: jsonb("attachments"),
+    isDefault: boolean("is_default").default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("email_templates_tenant_idx").on(table.tenantId),
+  })
+);
+
+export const prospects = pgTable(
+  "prospects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    companyName: varchar("company_name", { length: 500 }),
+    contactName: varchar("contact_name", { length: 255 }),
+    email: varchar("email", { length: 255 }),
+    linkedinUrl: text("linkedin_url"),
+    whatsapp: varchar("whatsapp", { length: 50 }),
+    industry: varchar("industry", { length: 255 }),
+    country: varchar("country", { length: 100 }),
+    website: text("website"),
+    researchSummary: text("research_summary"),
+    researchData: jsonb("research_data").$type<Record<string, unknown>>(),
+    status: prospectStatusEnum("status").default("new").notNull(),
+    source: varchar("source", { length: 100 }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("prospects_tenant_idx").on(table.tenantId),
+    statusIdx: index("prospects_status_idx").on(table.status),
+    emailIdx: index("prospects_email_idx").on(table.email),
+  })
+);
+
+export const campaigns = pgTable(
+  "campaigns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 255 }).notNull(),
+    industry: varchar("industry", { length: 255 }),
+    targetPersona: varchar("target_persona", { length: 255 }),
+    templateId: uuid("template_id").references(() => emailTemplates.id),
+    aiProvider: aiProviderEnum("ai_provider").default("custom"),
+    aiConfig: jsonb("ai_config"),
+    status: campaignStatusEnum("status").default("draft").notNull(),
+    totalProspects: integer("total_prospects").default(0),
+    sentCount: integer("sent_count").default(0),
+    openedCount: integer("opened_count").default(0),
+    repliedCount: integer("replied_count").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("campaigns_tenant_idx").on(table.tenantId),
+  })
+);
+
+export const emails = pgTable(
+  "emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references(() => prospects.id),
+    templateId: uuid("template_id").references(() => emailTemplates.id),
+    stepNumber: integer("step_number").default(1),
+    subject: varchar("subject", { length: 500 }),
+    body: text("body"),
+    status: emailStatusEnum("status").default("queued").notNull(),
+    resendId: varchar("resend_id", { length: 255 }),
+    sentAt: timestamp("sent_at"),
+    openedAt: timestamp("opened_at"),
+    clickedAt: timestamp("clicked_at"),
+    repliedAt: timestamp("replied_at"),
+    bouncedAt: timestamp("bounced_at"),
+    openCount: integer("open_count").default(0),
+    clickCount: integer("click_count").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    campaignIdx: index("emails_campaign_idx").on(table.campaignId),
+    prospectIdx: index("emails_prospect_idx").on(table.prospectId),
+    statusIdx: index("emails_status_idx").on(table.status),
+  })
+);
+
+export const followupSequences = pgTable(
+  "followup_sequences",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    stepNumber: integer("step_number").notNull(),
+    delayDays: integer("delay_days").notNull().default(3),
+    angle: varchar("angle", { length: 100 }),
+    templateId: uuid("template_id").references(() => emailTemplates.id),
+    enabled: boolean("enabled").default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    campaignStepUnique: uniqueIndex("followup_campaign_step_unique").on(
+      table.campaignId,
+      table.stepNumber
+    ),
+  })
+);
+
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: varchar("name", { length: 255 }).notNull(),
+    keyHash: text("key_hash").notNull(),
+    keyPrefix: varchar("key_prefix", { length: 16 }).notNull(),
+    permissions: jsonb("permissions").$type<string[]>().default(["read"]),
+    lastUsedAt: timestamp("last_used_at"),
+    revokedAt: timestamp("revoked_at"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("api_keys_tenant_idx").on(table.tenantId),
+  })
+);
+
+export const systemConfigs = pgTable("system_configs", {
+  key: varchar("key", { length: 255 }).primaryKey(),
+  value: text("value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => users.id),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    action: varchar("action", { length: 100 }).notNull(),
+    resource: varchar("resource", { length: 100 }).notNull(),
+    resourceId: uuid("resource_id"),
+    detail: jsonb("detail").$type<Record<string, unknown>>(),
+    ip: varchar("ip", { length: 45 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("audit_logs_tenant_idx").on(table.tenantId),
+    userIdx: index("audit_logs_user_idx").on(table.userId),
+    createdAtIdx: index("audit_logs_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const usageRecords = pgTable(
+  "usage_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    resource: varchar("resource", { length: 50 }).notNull(),
+    quantity: integer("quantity").default(1).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("usage_records_tenant_idx").on(table.tenantId),
+    resourceIdx: index("usage_records_resource_idx").on(table.resource),
+    createdAtIdx: index("usage_records_created_at_idx").on(table.createdAt),
+  })
+);

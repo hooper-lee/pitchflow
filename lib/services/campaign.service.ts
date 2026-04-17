@@ -1,0 +1,260 @@
+import { db } from "@/lib/db";
+import { campaigns, emails, prospects, emailTemplates, followupSequences } from "@/lib/db/schema";
+import { eq, and, desc, count } from "drizzle-orm";
+import { getAIProviderWithConfig, buildOutreachPrompt } from "@/lib/ai";
+
+interface CreateCampaignParams {
+  name: string;
+  industry?: string;
+  targetPersona?: string;
+  templateId?: string;
+  aiProvider?: "claude" | "openai" | "custom";
+  aiConfig?: {
+    baseURL?: string;
+    apiKey?: string;
+    model?: string;
+  };
+}
+
+export async function listCampaigns(tenantId: string, limit = 20) {
+  return db
+    .select()
+    .from(campaigns)
+    .where(eq(campaigns.tenantId, tenantId))
+    .orderBy(desc(campaigns.createdAt))
+    .limit(limit);
+}
+
+export async function getCampaign(id: string, tenantId: string) {
+  const [campaign] = await db
+    .select()
+    .from(campaigns)
+    .where(and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)))
+    .limit(1);
+
+  return campaign || null;
+}
+
+export async function createCampaign(
+  tenantId: string,
+  data: CreateCampaignParams
+) {
+  const [campaign] = await db
+    .insert(campaigns)
+    .values({
+      ...data,
+      aiConfig: data.aiConfig || null,
+      tenantId,
+      status: "draft",
+    })
+    .returning();
+
+  // Create default 3-step follow-up sequence
+  await db.insert(followupSequences).values([
+    {
+      campaignId: campaign.id,
+      stepNumber: 1,
+      delayDays: 3,
+      angle: "value_prop",
+      enabled: true,
+    },
+    {
+      campaignId: campaign.id,
+      stepNumber: 2,
+      delayDays: 7,
+      angle: "social_proof",
+      enabled: true,
+    },
+    {
+      campaignId: campaign.id,
+      stepNumber: 3,
+      delayDays: 14,
+      angle: "urgency",
+      enabled: true,
+    },
+  ]);
+
+  return campaign;
+}
+
+export async function startCampaign(id: string, tenantId: string) {
+  const campaign = await getCampaign(id, tenantId);
+  if (!campaign) throw new Error("Campaign not found");
+  if (campaign.status !== "draft") throw new Error("Campaign is not in draft status");
+
+  // Get all prospects for this tenant that are new or researched
+  const prospectsList = await db
+    .select()
+    .from(prospects)
+    .where(
+      and(
+        eq(prospects.tenantId, tenantId),
+        // Only include prospects with email
+      )
+    )
+    .limit(100);
+
+  const prospectsWithEmail = prospectsList.filter((p) => p.email);
+  if (prospectsWithEmail.length === 0) throw new Error("No prospects with email found");
+
+  // Get template if specified
+  let template = null;
+  if (campaign.templateId) {
+    [template] = await db
+      .select()
+      .from(emailTemplates)
+      .where(eq(emailTemplates.id, campaign.templateId))
+      .limit(1);
+  }
+
+  // Create email records for each prospect with AI-generated content
+  const ai = getAIProviderWithConfig(
+    campaign.aiProvider || "custom",
+    campaign.aiConfig as { baseURL?: string; apiKey?: string; model?: string } | undefined
+  );
+  const emailRecords = [];
+
+  for (const prospect of prospectsWithEmail) {
+    try {
+      const prompt = buildOutreachPrompt({
+        prospectName: prospect.contactName || "there",
+        companyName: prospect.companyName || "your company",
+        industry: prospect.industry || "",
+        country: prospect.country || "",
+        researchSummary: prospect.researchSummary || undefined,
+        productName: template?.productName || "our products and services",
+        senderName: template?.senderName || "Our Team",
+        angle: template?.angle || undefined,
+        templateBody: template?.body || undefined,
+      });
+
+      const result = await ai.generateEmail({ prompt });
+
+      const [emailRecord] = await db
+        .insert(emails)
+        .values({
+          campaignId: campaign.id,
+          prospectId: prospect.id,
+          templateId: campaign.templateId,
+          stepNumber: 1,
+          subject: result.subject,
+          body: result.body,
+          status: "queued",
+        })
+        .returning();
+
+      emailRecords.push(emailRecord);
+
+      // Update prospect status
+      await db
+        .update(prospects)
+        .set({ status: "contacted", updatedAt: new Date() })
+        .where(eq(prospects.id, prospect.id));
+    } catch (err) {
+      console.error(`Failed to generate email for prospect ${prospect.id}:`, err);
+    }
+  }
+
+  // Update campaign status
+  if (emailRecords.length > 0) {
+    await db
+      .update(campaigns)
+      .set({
+        status: "active",
+        totalProspects: emailRecords.length,
+        updatedAt: new Date(),
+      })
+      .where(eq(campaigns.id, campaign.id));
+  }
+
+  // Queue email sends (inline for simplicity, in production use BullMQ)
+  const { getFromAddress } = await import("@/lib/integrations/resend");
+  const fromAddress = await getFromAddress();
+  for (const emailRecord of emailRecords) {
+    try {
+      const prospect = prospectsWithEmail.find(
+        (p) => p.id === emailRecord.prospectId
+      );
+      if (!prospect?.email) continue;
+
+      // Import sendEmail directly since we're in the same process
+      const { sendEmail } = await import("@/lib/integrations/resend");
+      const html = (emailRecord.body || "")
+        .replace(/\n\n/g, "</p><p>")
+        .replace(/\n/g, "<br/>")
+        .replace(/^/, "<p>")
+        .replace(/$/, "</p>");
+
+      const result = await sendEmail({
+        from: fromAddress,
+        to: prospect.email,
+        subject: emailRecord.subject || "",
+        html,
+      });
+
+      await db
+        .update(emails)
+        .set({
+          status: "sent",
+          resendId: result.id,
+          sentAt: new Date(),
+        })
+        .where(eq(emails.id, emailRecord.id));
+
+      await db
+        .update(campaigns)
+        .set({ sentCount: db.$count ? undefined : emailRecords.length })
+        .where(eq(campaigns.id, campaign.id));
+    } catch (err) {
+      console.error(`Failed to send email ${emailRecord.id}:`, err);
+      await db
+        .update(emails)
+        .set({ status: "failed" })
+        .where(eq(emails.id, emailRecord.id));
+    }
+  }
+
+  return { campaign, emailCount: emailRecords.length };
+}
+
+export async function pauseCampaign(id: string, tenantId: string) {
+  const [campaign] = await db
+    .update(campaigns)
+    .set({ status: "paused", updatedAt: new Date() })
+    .where(and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)))
+    .returning();
+
+  return campaign;
+}
+
+export async function deleteCampaign(id: string, tenantId: string) {
+  await db
+    .delete(campaigns)
+    .where(and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)));
+}
+
+export async function getCampaignEmails(campaignId: string) {
+  const emailList = await db
+    .select({
+      id: emails.id,
+      subject: emails.subject,
+      body: emails.body,
+      status: emails.status,
+      stepNumber: emails.stepNumber,
+      sentAt: emails.sentAt,
+      openedAt: emails.openedAt,
+      repliedAt: emails.repliedAt,
+      openCount: emails.openCount,
+      clickCount: emails.clickCount,
+      createdAt: emails.createdAt,
+      prospectName: prospects.contactName,
+      prospectEmail: prospects.email,
+      prospectCompany: prospects.companyName,
+    })
+    .from(emails)
+    .leftJoin(prospects, eq(emails.prospectId, prospects.id))
+    .where(eq(emails.campaignId, campaignId))
+    .orderBy(desc(emails.createdAt));
+
+  return emailList;
+}
