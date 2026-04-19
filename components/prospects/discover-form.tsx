@@ -115,35 +115,43 @@ export function DiscoverForm() {
             </TabsContent>
 
             <TabsContent value="industry" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="industry">行业</Label>
-                  <Select value={industry} onValueChange={setIndustry}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择行业" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="electronics">电子产品</SelectItem>
-                      <SelectItem value="machinery">机械设备</SelectItem>
-                      <SelectItem value="textile">纺织服装</SelectItem>
-                      <SelectItem value="chemical">化工原料</SelectItem>
-                      <SelectItem value="auto">汽车配件</SelectItem>
-                      <SelectItem value="furniture">家居家具</SelectItem>
-                      <SelectItem value="food">食品饮料</SelectItem>
-                      <SelectItem value="other">其他</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-2">
+                <Label htmlFor="industry">行业 / 产品</Label>
+                <Input
+                  id="industry"
+                  placeholder="输入细分行业或产品，如: LED照明、太阳能板、汽车零部件"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {[
+                    "电子产品", "机械设备", "纺织服装", "化工原料",
+                    "汽车配件", "家居家具", "食品饮料", "医疗器械",
+                    "LED照明", "太阳能", "包装材料", "五金工具",
+                  ].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setIndustry(tag)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        industry === tag
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted hover:bg-muted/80 border-transparent"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="keywords">关键词</Label>
-                  <Input
-                    id="keywords"
-                    placeholder="如: solar panel distributor"
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                  />
-                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="keywords">关键词</Label>
+                <Input
+                  id="keywords"
+                  placeholder="如: solar panel distributor"
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                />
               </div>
             </TabsContent>
           </Tabs>

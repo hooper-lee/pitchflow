@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   ScrollText,
+  Timer,
 } from "lucide-react";
 
 const adminNavItems = [
@@ -14,6 +15,7 @@ const adminNavItems = [
   { href: "/admin/users", label: "用户管理", icon: Users },
   { href: "/admin/tenants", label: "租户管理", icon: Building2 },
   { href: "/admin/usage", label: "使用量监控", icon: BarChart3 },
+  { href: "/admin/tasks", label: "定时任务", icon: Timer },
   { href: "/admin/configs", label: "系统配置", icon: Settings },
   { href: "/admin/audit-logs", label: "审计日志", icon: ScrollText },
 ];

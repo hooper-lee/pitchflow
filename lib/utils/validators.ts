@@ -27,6 +27,7 @@ export const createCampaignSchema = z.object({
   industry: z.string().max(255).optional(),
   targetPersona: z.string().max(255).optional(),
   templateId: z.string().uuid().optional(),
+  prospectIds: z.array(z.string().uuid()).optional(),
   aiProvider: z.enum(["claude", "openai", "custom"]).default("custom"),
   aiConfig: z.object({
     baseURL: z.string().url().optional(),

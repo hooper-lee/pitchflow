@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,16 +18,36 @@ export default function AlertsPage() {
   const [feishuEnabled, setFeishuEnabled] = useState(false);
   const [wecomEnabled, setWecomEnabled] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [openThreshold, setOpenThreshold] = useState(3);
+
+  useEffect(() => {
+    fetch("/api/v1/alerts")
+      .then((res) => res.json())
+      .then((data) => {
+        const a = data.data?.alerts || {};
+        if (a.feishu) {
+          setFeishuEnabled(a.feishu.enabled || false);
+          setFeishuUrl(a.feishu.url || "");
+        }
+        if (a.wecom) {
+          setWecomEnabled(a.wecom.enabled || false);
+          setWecomUrl(a.wecom.url || "");
+        }
+        if (a.email) setEmailEnabled(a.email.enabled !== false);
+        if (a.openThreshold) setOpenThreshold(a.openThreshold);
+      })
+      .catch(() => {});
+  });
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Save to tenant settings
       const settings = {
         alerts: {
           email: { enabled: emailEnabled },
           feishu: { enabled: feishuEnabled, url: feishuUrl },
           wecom: { enabled: wecomEnabled, url: wecomUrl },
+          openThreshold,
         },
       };
 
@@ -67,9 +87,26 @@ export default function AlertsPage() {
         <CardHeader>
           <CardTitle>告警触发条件</CardTitle>
           <CardDescription>
-            客户打开邮件 3 次以上、点击链接或直接回复时触发告警
+            客户点击链接或直接回复时立即触发告警
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Label htmlFor="open-threshold" className="whitespace-nowrap">
+              邮件打开 ≥
+            </Label>
+            <Input
+              id="open-threshold"
+              type="number"
+              min={1}
+              max={20}
+              value={openThreshold}
+              onChange={(e) => setOpenThreshold(parseInt(e.target.value) || 3)}
+              className="w-20"
+            />
+            <span className="text-sm text-muted-foreground">次时触发高意向告警</span>
+          </div>
+        </CardContent>
       </Card>
 
       <Card>

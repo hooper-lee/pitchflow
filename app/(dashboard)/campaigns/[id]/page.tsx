@@ -170,7 +170,7 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -199,6 +199,18 @@ export default function CampaignDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{campaign.openedCount || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              已点击
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {campaign.emails.filter((e) => e.status === "clicked").length || 0}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -233,8 +245,10 @@ export default function CampaignDetailPage() {
                     <TableHead>公司</TableHead>
                     <TableHead>邮箱</TableHead>
                     <TableHead>主题</TableHead>
+                    <TableHead>轮次</TableHead>
                     <TableHead>状态</TableHead>
-                    <TableHead>打开次数</TableHead>
+                    <TableHead>打开</TableHead>
+                    <TableHead>点击</TableHead>
                     <TableHead>发送时间</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -250,12 +264,16 @@ export default function CampaignDetailPage() {
                       <TableCell className="max-w-[200px] truncate">
                         {email.subject || "—"}
                       </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        第 {email.stepNumber || 1} 轮
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {emailStatusLabels[email.status] || email.status}
                         </Badge>
                       </TableCell>
                       <TableCell>{email.openCount || 0}</TableCell>
+                      <TableCell>{email.clickCount || 0}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {email.sentAt
                           ? new Date(email.sentAt).toLocaleString("zh-CN")

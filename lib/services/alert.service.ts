@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { tenants, emails, prospects, campaigns } from "@/lib/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/integrations/resend";
 import { sendFeishuAlert } from "@/lib/integrations/feishu";
 import { sendWecomAlert } from "@/lib/integrations/wecom";
+import { getFromAddress } from "@/lib/integrations/resend";
 
 export interface AlertTrigger {
   type: "high_intent" | "replied" | "clicked";
@@ -13,7 +14,6 @@ export interface AlertTrigger {
 }
 
 export async function processAlert(emailId: string, trigger: AlertTrigger) {
-  // Get email with campaign and prospect
   const [email] = await db
     .select()
     .from(emails)
@@ -52,18 +52,11 @@ export async function processAlert(emailId: string, trigger: AlertTrigger) {
   // Email alert
   if (alerts.email?.enabled !== false) {
     try {
-      // Find team members to notify
-      const teamMembers = await db
-        .select({ email: prospects.email })
-        .from(prospects)
-        .where(eq(prospects.tenantId, campaign.tenantId))
-        .limit(1);
-
-      // Use tenant admin email from settings if available
-      const adminEmail = (settings.adminEmail as string) || process.env.RESEND_FROM_EMAIL;
+      const adminEmail = (settings.adminEmail as string) || undefined;
       if (adminEmail) {
+        const fromAddress = await getFromAddress();
         await sendEmail({
-          from: process.env.RESEND_FROM_EMAIL || "noreply@localhost",
+          from: fromAddress,
           to: adminEmail,
           subject: `[PitchFlow] ${message.title}`,
           html: message.html,

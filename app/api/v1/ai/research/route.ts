@@ -12,13 +12,17 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "prospectId is required" }, { status: 400 });
     }
 
-    const summary = await researchProspect(
+    const result = await researchProspect(
       prospectId,
       tenantId,
       aiProvider || "claude"
     );
 
-    return apiResponse({ summary });
+    return apiResponse({
+      summary: result.summary,
+      companyScore: result.companyScore ?? null,
+      matchScore: result.matchScore ?? null,
+    });
   } catch (error) {
     return handleApiError(error);
   }

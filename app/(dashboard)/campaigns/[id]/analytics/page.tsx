@@ -12,9 +12,11 @@ interface CampaignStats {
   total: number;
   sent: number;
   opened: number;
+  clicked: number;
   replied: number;
   bounced: number;
   openRate: number;
+  clickRate: number;
   replyRate: number;
 }
 
@@ -66,12 +68,13 @@ export default function CampaignAnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         {[
           { label: "总邮件数", value: stats?.total || 0 },
           { label: "已发送", value: stats?.sent || 0 },
           { label: "已打开", value: stats?.opened || 0 },
           { label: "打开率", value: `${stats?.openRate || 0}%` },
+          { label: "点击率", value: `${stats?.clickRate || 0}%` },
           { label: "回复率", value: `${stats?.replyRate || 0}%` },
         ].map((item) => (
           <Card key={item.label}>
@@ -97,6 +100,7 @@ export default function CampaignAnalyticsPage() {
               {[
                 { label: "已发送", value: stats?.sent || 0, color: "bg-blue-500" },
                 { label: "已打开", value: stats?.opened || 0, color: "bg-green-500" },
+                { label: "已点击", value: stats?.clicked || 0, color: "bg-yellow-500" },
                 { label: "已回复", value: stats?.replied || 0, color: "bg-purple-500" },
                 { label: "退回", value: stats?.bounced || 0, color: "bg-red-500" },
               ].map((item) => {
@@ -133,6 +137,7 @@ export default function CampaignAnalyticsPage() {
                 { label: "目标客户", value: stats?.total || 0 },
                 { label: "邮件已发送", value: stats?.sent || 0 },
                 { label: "邮件已打开", value: stats?.opened || 0 },
+                { label: "已点击", value: stats?.clicked || 0 },
                 { label: "已回复", value: stats?.replied || 0 },
               ].map((item, i, arr) => {
                 const base = arr[0].value || 1;

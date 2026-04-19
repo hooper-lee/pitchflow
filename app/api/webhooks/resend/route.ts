@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { emails, campaigns } from "@/lib/db/schema";
+import { emails, campaigns, tenants } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { processAlert } from "@/lib/services/alert.service";
 
 // Resend webhook events
 interface ResendWebhookEvent {
@@ -20,36 +21,31 @@ export async function POST(request: NextRequest) {
     const body: ResendWebhookEvent = await request.json();
     const { type, data } = body;
 
-    // Find the email by resend_id (stored in email tags or email_id)
-    // Resend sends events with the email ID we got when sending
-    const emailId = data.email_id;
-    if (!emailId) {
+    const resendId = data.email_id;
+    if (!resendId) {
       return Response.json({ received: true });
     }
 
-    // Note: We need to find by resendId, not by our internal id
-    // For now, we'll process the event type
-    console.log(`Resend webhook: ${type} for email ${emailId}`);
+    console.log(`Resend webhook: ${type} for email ${resendId}`);
 
     switch (type) {
       case "email.delivered":
-        // Update email status
+        await db
+          .update(emails)
+          .set({ status: "delivered" })
+          .where(eq(emails.resendId, resendId));
         break;
       case "email.opened":
-        // Increment open count and update openedAt
-        await handleEmailOpen(emailId);
+        await handleEmailOpen(resendId);
         break;
       case "email.clicked":
-        // Increment click count and update clickedAt
-        await handleEmailClick(emailId);
+        await handleEmailClick(resendId);
         break;
       case "email.bounced":
-        // Mark as bounced
-        await handleEmailBounce(emailId);
+        await handleEmailBounce(resendId);
         break;
       case "email.replied":
-        // Mark as replied
-        await handleEmailReply(emailId);
+        await handleEmailReply(resendId);
         break;
     }
 
@@ -60,8 +56,40 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function getOpenThreshold(emailInternalId: string): Promise<number> {
+  try {
+    const [email] = await db
+      .select({ campaignId: emails.campaignId })
+      .from(emails)
+      .where(eq(emails.id, emailInternalId))
+      .limit(1);
+    if (!email) return 3;
+
+    const [campaign] = await db
+      .select({ tenantId: campaigns.tenantId })
+      .from(campaigns)
+      .where(eq(campaigns.id, email.campaignId))
+      .limit(1);
+    if (!campaign) return 3;
+
+    const [tenant] = await db
+      .select({ settings: tenants.settings })
+      .from(tenants)
+      .where(eq(tenants.id, campaign.tenantId))
+      .limit(1);
+    if (!tenant) return 3;
+
+    const settings = (tenant.settings as Record<string, unknown>) || {};
+    const alerts = (settings.alerts as Record<string, unknown>) || {};
+    return (alerts.openThreshold as number) || 3;
+  } catch {
+    return 3;
+  }
+}
+
 async function handleEmailOpen(resendId: string) {
   try {
+    // Increment open count
     await db
       .update(emails)
       .set({
@@ -70,6 +98,31 @@ async function handleEmailOpen(resendId: string) {
         status: "opened",
       })
       .where(eq(emails.resendId, resendId));
+
+    // Check if should trigger high-intent alert
+    const [email] = await db
+      .select({ id: emails.id, openCount: emails.openCount, highIntentAlertedAt: emails.highIntentAlertedAt })
+      .from(emails)
+      .where(eq(emails.resendId, resendId))
+      .limit(1);
+
+    if (!email || email.highIntentAlertedAt) return;
+
+    const threshold = await getOpenThreshold(email.id);
+    const currentCount = (email.openCount || 0) + 1; // +1 because the update above just happened
+
+    if (currentCount >= threshold) {
+      await db
+        .update(emails)
+        .set({ highIntentAlertedAt: new Date() })
+        .where(eq(emails.id, email.id));
+
+      processAlert(email.id, {
+        type: "high_intent",
+        emailId: email.id,
+        openCount: currentCount,
+      }).catch((err) => console.error("Alert dispatch failed:", err));
+    }
   } catch (err) {
     console.error("Failed to handle email open:", err);
   }
@@ -85,6 +138,26 @@ async function handleEmailClick(resendId: string) {
         status: "clicked",
       })
       .where(eq(emails.resendId, resendId));
+
+    // Trigger click alert (once per email)
+    const [email] = await db
+      .select({ id: emails.id, clickCount: emails.clickCount, clickAlertedAt: emails.clickAlertedAt })
+      .from(emails)
+      .where(eq(emails.resendId, resendId))
+      .limit(1);
+
+    if (!email || email.clickAlertedAt) return;
+
+    await db
+      .update(emails)
+      .set({ clickAlertedAt: new Date() })
+      .where(eq(emails.id, email.id));
+
+    processAlert(email.id, {
+      type: "clicked",
+      emailId: email.id,
+      clickCount: (email.clickCount || 0) + 1,
+    }).catch((err) => console.error("Alert dispatch failed:", err));
   } catch (err) {
     console.error("Failed to handle email click:", err);
   }
@@ -113,6 +186,25 @@ async function handleEmailReply(resendId: string) {
         repliedAt: new Date(),
       })
       .where(eq(emails.resendId, resendId));
+
+    // Trigger reply alert (once per email)
+    const [email] = await db
+      .select({ id: emails.id, replyAlertedAt: emails.replyAlertedAt })
+      .from(emails)
+      .where(eq(emails.resendId, resendId))
+      .limit(1);
+
+    if (!email || email.replyAlertedAt) return;
+
+    await db
+      .update(emails)
+      .set({ replyAlertedAt: new Date() })
+      .where(eq(emails.id, email.id));
+
+    processAlert(email.id, {
+      type: "replied",
+      emailId: email.id,
+    }).catch((err) => console.error("Alert dispatch failed:", err));
   } catch (err) {
     console.error("Failed to handle email reply:", err);
   }

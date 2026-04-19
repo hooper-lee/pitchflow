@@ -26,6 +26,8 @@ interface Prospect {
   email: string | null;
   industry: string | null;
   country: string | null;
+  companyScore: number | null;
+  matchScore: number | null;
   status: string;
   source: string | null;
   createdAt: string;
@@ -51,6 +53,12 @@ const statusLabels: Record<string, string> = {
   unsubscribed: "退订",
 };
 
+function MiniScore({ score }: { score: number | null }) {
+  if (score === null) return <span className="text-muted-foreground">—</span>;
+  const color = score >= 7 ? "text-green-600" : score >= 4 ? "text-yellow-600" : "text-red-600";
+  return <span className={`text-sm font-medium ${color}`}>{score}</span>;
+}
+
 export function ProspectTable({
   prospects,
   onRefresh,
@@ -74,6 +82,7 @@ export function ProspectTable({
             <TableHead>邮箱</TableHead>
             <TableHead>行业</TableHead>
             <TableHead>国家</TableHead>
+            <TableHead className="text-center">评分</TableHead>
             <TableHead>状态</TableHead>
             <TableHead>来源</TableHead>
             <TableHead className="w-[70px]"></TableHead>
@@ -91,6 +100,13 @@ export function ProspectTable({
               </TableCell>
               <TableCell>{prospect.industry || "—"}</TableCell>
               <TableCell>{prospect.country || "—"}</TableCell>
+              <TableCell className="text-center">
+                <div className="flex items-center justify-center gap-1.5">
+                  <MiniScore score={prospect.companyScore} />
+                  <span className="text-muted-foreground text-xs">/</span>
+                  <MiniScore score={prospect.matchScore} />
+                </div>
+              </TableCell>
               <TableCell>
                 <Badge variant={statusColors[prospect.status] || "secondary"}>
                   {statusLabels[prospect.status] || prospect.status}

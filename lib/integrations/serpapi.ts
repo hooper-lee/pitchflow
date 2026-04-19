@@ -24,16 +24,18 @@ export interface SearchResult {
   snippet: string;
 }
 
-export async function searchCompany(domain: string): Promise<SearchResult[]> {
+export async function searchCompany(query: string): Promise<SearchResult[]> {
   const apiKey = await getApiKey();
   if (!apiKey) return [];
 
   try {
+    // Exclude social/gov sites from results
+    const excludeSites = "-site:facebook.com -site:linkedin.com -site:twitter.com -site:instagram.com -site:youtube.com -site:wikipedia.org";
     const params = new URLSearchParams({
-      q: `${domain} company`,
+      q: `${query} ${excludeSites}`,
       api_key: apiKey,
       engine: "google",
-      num: "5",
+      num: "10",
     });
 
     const res = await fetch(`${SERPAPI_BASE}?${params}`);

@@ -9,6 +9,7 @@ import {
   jsonb,
   pgEnum,
   uniqueIndex,
+  unique,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -182,6 +183,8 @@ export const prospects = pgTable(
     website: text("website"),
     researchSummary: text("research_summary"),
     researchData: jsonb("research_data").$type<Record<string, unknown>>(),
+    companyScore: integer("company_score"),
+    matchScore: integer("match_score"),
     status: prospectStatusEnum("status").default("new").notNull(),
     source: varchar("source", { length: 100 }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
@@ -221,6 +224,25 @@ export const campaigns = pgTable(
   })
 );
 
+export const campaignProspects = pgTable(
+  "campaign_prospects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references(() => prospects.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    unique: unique("campaign_prospect_unique").on(table.campaignId, table.prospectId),
+    campaignIdx: index("cp_campaign_idx").on(table.campaignId),
+    prospectIdx: index("cp_prospect_idx").on(table.prospectId),
+  })
+);
+
 export const emails = pgTable(
   "emails",
   {
@@ -244,6 +266,9 @@ export const emails = pgTable(
     bouncedAt: timestamp("bounced_at"),
     openCount: integer("open_count").default(0),
     clickCount: integer("click_count").default(0),
+    highIntentAlertedAt: timestamp("high_intent_alerted_at"),
+    clickAlertedAt: timestamp("click_alerted_at"),
+    replyAlertedAt: timestamp("reply_alerted_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({

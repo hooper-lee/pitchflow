@@ -11,7 +11,7 @@ import {
   discoverProspectsSchema,
   paginationSchema,
 } from "@/lib/utils/validators";
-import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
+import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       const input = discoverProspectsSchema.parse(body);
       const quota = await checkProspectQuota(tenantId, 1);
       if (!quota.allowed) {
-        return apiResponse({ error: quota.message }, 403);
+        return apiError(quota.message || "Quota exceeded", 403);
       }
       const prospects = await discoverProspects(tenantId, input);
       return apiResponse(prospects, 201);
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const input = createProspectSchema.parse(body);
     const quota = await checkProspectQuota(tenantId, 1);
     if (!quota.allowed) {
-      return apiResponse({ error: quota.message }, 403);
+      return apiError(quota.message || "Quota exceeded", 403);
     }
     const prospect = await createProspect(tenantId, input);
     return apiResponse(prospect, 201);

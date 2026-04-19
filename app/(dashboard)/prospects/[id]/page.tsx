@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Mail, Building2, Globe, MapPin, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Building2, Globe, MapPin, Loader2, Star, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Prospect {
@@ -20,9 +20,22 @@ interface Prospect {
   country: string | null;
   website: string | null;
   researchSummary: string | null;
+  companyScore: number | null;
+  matchScore: number | null;
   status: string;
   source: string | null;
   createdAt: string;
+}
+
+function ScoreBadge({ score, max = 10 }: { score: number | null; max?: number }) {
+  if (score === null) return <span className="text-sm text-muted-foreground">—</span>;
+  const color = score >= 7 ? "text-green-600" : score >= 4 ? "text-yellow-600" : "text-red-600";
+  const bg = score >= 7 ? "bg-green-50 border-green-200" : score >= 4 ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200";
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold border ${color} ${bg}`}>
+      {score}/{max}
+    </span>
+  );
 }
 
 export default function ProspectDetailPage() {
@@ -52,9 +65,18 @@ export default function ProspectDetailPage() {
       const data = await res.json();
       if (data.data?.summary) {
         setProspect((prev: Prospect | null) =>
-          prev ? { ...prev, researchSummary: data.data.summary } : prev
+          prev
+            ? {
+                ...prev,
+                researchSummary: data.data.summary,
+                companyScore: data.data.companyScore ?? prev.companyScore,
+                matchScore: data.data.matchScore ?? prev.matchScore,
+              }
+            : prev
         );
         toast({ title: "AI 背调完成" });
+      } else if (data.error) {
+        toast({ title: "背调失败", description: data.error, variant: "destructive" });
       }
     } catch {
       toast({ title: "背调失败", description: "请检查 API Key 配置", variant: "destructive" });
@@ -75,6 +97,8 @@ export default function ProspectDetailPage() {
   if (!prospect) {
     return <div>客户未找到</div>;
   }
+
+  const hasScores = prospect.companyScore !== null || prospect.matchScore !== null;
 
   return (
     <div className="space-y-6">
@@ -152,27 +176,66 @@ export default function ProspectDetailPage() {
           </CardContent>
         </Card>
 
+        {/* Scores card */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">AI 背调报告</CardTitle>
+            <CardTitle className="text-lg">背调评分</CardTitle>
           </CardHeader>
-          <CardContent>
-            {prospect.researchSummary ? (
-              <p className="text-sm whitespace-pre-wrap">
-                {prospect.researchSummary}
-              </p>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <p className="text-sm">尚未进行 AI 背调</p>
-                <Button variant="outline" size="sm" className="mt-4" onClick={handleResearch} disabled={researching}>
-                  {researching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {researching ? "背调中..." : "开始背调"}
-                </Button>
+          <CardContent className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">公司真实性</span>
               </div>
+              <ScoreBadge score={prospect.companyScore} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">业务匹配度</span>
+              </div>
+              <ScoreBadge score={prospect.matchScore} />
+            </div>
+            {!hasScores && (
+              <p className="text-xs text-muted-foreground text-center pt-2">
+                点击「开始背调」生成评分
+              </p>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleResearch}
+              disabled={researching}
+            >
+              {researching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {researching ? "背调中..." : hasScores ? "重新背调" : "开始背调"}
+            </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* Research report */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">AI 背调报告</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {prospect.researchSummary ? (
+            <div className="text-sm whitespace-pre-wrap">
+              {prospect.researchSummary}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="text-sm">尚未进行 AI 背调</p>
+              <Button variant="outline" size="sm" className="mt-4" onClick={handleResearch} disabled={researching}>
+                {researching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {researching ? "背调中..." : "开始背调"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

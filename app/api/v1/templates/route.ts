@@ -6,7 +6,7 @@ import {
 } from "@/lib/services/template.service";
 import { checkTemplateQuota } from "@/lib/services/quota.service";
 import { createTemplateSchema } from "@/lib/utils/validators";
-import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
+import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
 
 export async function GET() {
   try {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const input = createTemplateSchema.parse(body);
     const quota = await checkTemplateQuota(tenantId);
     if (!quota.allowed) {
-      return apiResponse({ error: quota.message }, 403);
+      return apiError(quota.message || "Quota exceeded", 403);
     }
     const template = await createTemplate(tenantId, input);
     return apiResponse(template, 201);

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { campaigns, emails, prospects, emailTemplates, followupSequences } from "@/lib/db/schema";
+import { campaigns, emails, prospects, emailTemplates, followupSequences, campaignProspects } from "@/lib/db/schema";
 import { eq, and, desc, count } from "drizzle-orm";
 import { getAIProviderWithConfig, buildOutreachPrompt } from "@/lib/ai";
 
@@ -8,6 +8,7 @@ interface CreateCampaignParams {
   industry?: string;
   targetPersona?: string;
   templateId?: string;
+  prospectIds?: string[];
   aiProvider?: "claude" | "openai" | "custom";
   aiConfig?: {
     baseURL?: string;
@@ -35,19 +36,39 @@ export async function getCampaign(id: string, tenantId: string) {
   return campaign || null;
 }
 
+export async function getCampaignProspectCount(campaignId: string): Promise<number> {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(campaignProspects)
+    .where(eq(campaignProspects.campaignId, campaignId));
+  return Number(total);
+}
+
 export async function createCampaign(
   tenantId: string,
   data: CreateCampaignParams
 ) {
+  const { prospectIds, ...campaignData } = data;
+
   const [campaign] = await db
     .insert(campaigns)
     .values({
-      ...data,
-      aiConfig: data.aiConfig || null,
+      ...campaignData,
+      aiConfig: campaignData.aiConfig || null,
       tenantId,
       status: "draft",
     })
     .returning();
+
+  // Bind prospects to campaign
+  if (prospectIds && prospectIds.length > 0) {
+    await db.insert(campaignProspects).values(
+      prospectIds.map((pid) => ({
+        campaignId: campaign.id,
+        prospectId: pid,
+      }))
+    );
+  }
 
   // Create default 3-step follow-up sequence
   await db.insert(followupSequences).values([
@@ -82,20 +103,20 @@ export async function startCampaign(id: string, tenantId: string) {
   if (!campaign) throw new Error("Campaign not found");
   if (campaign.status !== "draft") throw new Error("Campaign is not in draft status");
 
-  // Get all prospects for this tenant that are new or researched
-  const prospectsList = await db
-    .select()
-    .from(prospects)
-    .where(
-      and(
-        eq(prospects.tenantId, tenantId),
-        // Only include prospects with email
-      )
-    )
-    .limit(100);
+  // Get prospects bound to this campaign
+  const boundProspects = await db
+    .select({ prospect: prospects })
+    .from(campaignProspects)
+    .innerJoin(prospects, eq(campaignProspects.prospectId, prospects.id))
+    .where(eq(campaignProspects.campaignId, campaign.id));
 
-  const prospectsWithEmail = prospectsList.filter((p) => p.email);
-  if (prospectsWithEmail.length === 0) throw new Error("No prospects with email found");
+  const prospectsWithEmail = boundProspects
+    .map((r) => r.prospect)
+    .filter((p) => p.email);
+
+  if (prospectsWithEmail.length === 0) {
+    throw new Error("该活动未绑定客户或客户没有邮箱，请先在活动配置中选择客户");
+  }
 
   // Get template if specified
   let template = null;

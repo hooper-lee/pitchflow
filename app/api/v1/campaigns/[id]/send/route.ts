@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { requireTenant } from "@/lib/auth";
 import { startCampaign } from "@/lib/services/campaign.service";
 import { checkEmailQuota } from "@/lib/services/quota.service";
-import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
+import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
 
 export async function POST(
   request: NextRequest,
@@ -12,7 +12,7 @@ export async function POST(
     const { tenantId } = await requireTenant();
     const quota = await checkEmailQuota(tenantId);
     if (!quota.allowed) {
-      return apiResponse({ error: quota.message }, 403);
+      return apiError(quota.message || "Quota exceeded", 403);
     }
     const result = await startCampaign(params.id, tenantId);
     return apiResponse(result);

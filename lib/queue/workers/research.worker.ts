@@ -5,9 +5,9 @@ import type { ResearchJobData } from "../jobs/research.job";
 
 export async function processResearchJob(job: Job<ResearchJobData>) {
   const { prospectId, tenantId, aiProvider } = job.data;
-  const summary = await researchProspect(prospectId, tenantId, aiProvider);
+  const result = await researchProspect(prospectId, tenantId, aiProvider);
   console.log(`Research completed for prospect ${prospectId}`);
-  return { prospectId, summaryLength: summary.length };
+  return { prospectId, summaryLength: result.summary.length, companyScore: result.companyScore, matchScore: result.matchScore };
 }
 
 if (process.env.NODE_ENV !== "production" || process.env.ENABLE_WORKERS === "true") {

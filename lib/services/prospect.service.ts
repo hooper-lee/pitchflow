@@ -1,10 +1,30 @@
 import { db } from "@/lib/db";
 import { prospects, systemConfigs } from "@/lib/db/schema";
-import { eq, and, ilike, desc, count, or } from "drizzle-orm";
+import { eq, and, ilike, desc, count, or, sql } from "drizzle-orm";
 import { discoverEmails as hunterDiscover } from "@/lib/integrations/hunter";
 import { discoverEmails as snovDiscover } from "@/lib/integrations/snovio";
 import { inferEmailPattern } from "@/lib/utils/email-patterns";
 import { searchCompany } from "@/lib/integrations/serpapi";
+
+// Domains to filter out from SerpAPI results
+const BLOCKED_DOMAINS = [
+  "facebook.com", "linkedin.com", "twitter.com", "instagram.com",
+  "youtube.com", "wikipedia.org", "medium.com", "reddit.com",
+  "quora.com", "glassdoor.com", "indeed.com", "crunchbase.com",
+  "bloomberg.com", "amazon.com", "alibaba.com", "globalsources.com",
+  "zhihu.com", "csdn.net", "jianshu.com", "baidu.com",
+  "weibo.com", "douban.com", "tianyancha.com", "qcc.com",
+  "1688.com", "made-in-china.com",
+];
+
+function isBlockedDomain(domain: string): boolean {
+  const lower = domain.toLowerCase();
+  // Block social/news/education/government sites
+  if (BLOCKED_DOMAINS.some((blocked) => lower.includes(blocked))) return true;
+  if (lower.endsWith(".gov") || lower.endsWith(".gov.cn") || lower.endsWith(".edu") || lower.endsWith(".mil")) return true;
+  if (lower.includes(".gov.") || lower.includes(".edu.")) return true;
+  return false;
+}
 
 async function getEnabledProviders(): Promise<("hunter" | "snovio")[]> {
   try {
@@ -17,7 +37,7 @@ async function getEnabledProviders(): Promise<("hunter" | "snovio")[]> {
           eq(systemConfigs.key, "DISCOVERY_PROVIDER_SNOVIO"),
           eq(systemConfigs.key, "HUNTER_IO_API_KEY"),
           eq(systemConfigs.key, "SNOV_CLIENT_ID")
-        )!
+        )
       );
 
     const map: Record<string, string> = {};
@@ -259,14 +279,19 @@ export async function discoverProspects(
     }
   } else {
     // Industry/keyword-based discovery via SerpAPI
-    const searchQuery = [
-      params.keywords,
-      params.industry,
+    // Normalize Chinese punctuation to ASCII
+    const normalize = (s: string) => s.replace(/，/g, ",").replace(/、/g, " ").replace(/。/g, ".");
+    const hasChinese = /[\u4e00-\u9fff]/.test(params.keywords || params.industry || "");
+    const searchParts = [
+      params.keywords ? normalize(params.keywords) : undefined,
+      params.industry ? normalize(params.industry) : undefined,
       params.country,
-      "buyer distributor importer",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    ].filter(Boolean);
+
+    // Only add "buyer importer" for English queries
+    const searchQuery = hasChinese
+      ? searchParts.join(" ")
+      : [...searchParts, "buyer OR importer OR distributor"].join(" ");
 
     const searchResults = await searchCompany(searchQuery);
 
@@ -279,26 +304,35 @@ export async function discoverProspects(
         continue;
       }
 
-      // Skip if we already have this company
+      // Filter out non-prospect domains
+      if (isBlockedDomain(domain)) continue;
+
+      // Skip if we already have a prospect from this domain
       const [existing] = await db
         .select()
         .from(prospects)
         .where(
           and(
             eq(prospects.tenantId, tenantId),
-            eq(prospects.companyName, domain)
+            // Match by domain: check website URL contains this domain
+            or(
+              eq(prospects.companyName, domain),
+              sql`${prospects.website} LIKE ${`%${domain}%`}`
+            )!
           )
         )
         .limit(1);
 
       if (existing) continue;
 
+      // Try to extract a company name from the search result title
+      const companyName = result.title.split(/[-|–—]/)[0].trim() || domain;
       const inferred = inferEmailPattern("contact", "", domain);
       const [prospect] = await db
         .insert(prospects)
         .values({
           tenantId,
-          companyName: domain,
+          companyName,
           email: inferred,
           industry: params.industry,
           country: params.country,
