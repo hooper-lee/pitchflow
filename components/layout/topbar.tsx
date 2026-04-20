@@ -1,7 +1,6 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,8 +17,6 @@ import { MobileNav } from "./mobile-nav";
 
 export function Topbar() {
   const { data: session } = useSession();
-  const router = useRouter();
-
   const initials = session?.user?.name
     ? session.user.name
         .split(" ")

@@ -1,17 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Check } from "lucide-react";
 import Link from "next/link";
-import { PLAN_LIMITS } from "@/lib/constants/plans";
-
-interface Tenant {
-  plan: string;
-}
 
 const plans = [
   {
@@ -63,8 +58,7 @@ const plans = [
 ];
 
 export default function BillingPage() {
-  const { data: session } = useSession();
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  useSession();
 
   useEffect(() => {
     fetch("/api/v1/alerts")

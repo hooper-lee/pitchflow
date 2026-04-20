@@ -9,7 +9,6 @@ import {
   Send,
   TrendingUp,
   Mail,
-  MousePointerClick,
 } from "lucide-react";
 
 interface Stats {

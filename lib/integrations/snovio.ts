@@ -9,6 +9,15 @@ interface SnovToken {
   expires_at: number;
 }
 
+interface SnovAccessTokenResponse {
+  access_token: string;
+  expires_in: number;
+}
+
+interface SnovTaskPollResponse<T> {
+  data?: T & { is_in_progress?: boolean };
+}
+
 let cachedToken: SnovToken | null = null;
 
 async function getConfig(key: string, envFallback: string): Promise<string | null> {
@@ -52,7 +61,7 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`Snov.io auth error: ${res.status}`);
   }
 
-  const data = await res.json();
+  const data: SnovAccessTokenResponse = await res.json();
   cachedToken = {
     access_token: data.access_token,
     expires_at: Date.now() + (data.expires_in - 60) * 1000,
@@ -85,7 +94,7 @@ async function snovRequest<T>(
 async function pollTask<T>(resultEndpoint: string, maxRetries = 10): Promise<T> {
   for (let i = 0; i < maxRetries; i++) {
     await new Promise((r) => setTimeout(r, i === 0 ? 1000 : 2000));
-    const result = await snovRequest<any>(resultEndpoint);
+    const result = await snovRequest<SnovTaskPollResponse<T>>(resultEndpoint);
     if (result.data && !result.data.is_in_progress) {
       return result.data;
     }
@@ -126,14 +135,14 @@ export async function discoverEmails(
     );
 
     // Step 2: Get domain search results
-    const domainResult = await pollTask<any>(
+    const domainResult = await pollTask<{ prospects_url?: string }>(
       `/v2/domain-search/result/${startResult.data.task_hash}`
     );
 
     if (!domainResult.prospects_url) return [];
 
     // Step 3: Get prospect profiles with optional position filter
-    const prospectsBody: Record<string, any> = { domain };
+    const prospectsBody: { domain: string; positions?: string[] } = { domain };
     if (options.positions?.length) {
       prospectsBody.positions = options.positions;
     }

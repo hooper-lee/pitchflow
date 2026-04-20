@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
@@ -27,8 +26,6 @@ export function DiscoverForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"domain" | "industry">("domain");
-  const [domain, setDomain] = useState("");
   const [industry, setIndustry] = useState("");
   const [country, setCountry] = useState("");
   const [keywords, setKeywords] = useState("");
@@ -39,16 +36,11 @@ export function DiscoverForm() {
     setLoading(true);
 
     try {
-      const body: Record<string, any> = {
+      const body: Record<string, string | number> = {
         limit: parseInt(limit),
       };
-
-      if (mode === "domain") {
-        if (domain) body.domain = domain;
-      } else {
-        if (industry) body.industry = industry;
-        if (keywords) body.keywords = keywords;
-      }
+      if (industry) body.industry = industry;
+      if (keywords) body.keywords = keywords;
       if (country) body.country = country;
 
       const res = await fetch("/api/v1/prospects", {
@@ -91,70 +83,56 @@ export function DiscoverForm() {
       <CardHeader>
         <CardTitle>智能客户挖掘</CardTitle>
         <CardDescription>
-          通过域名、行业或关键词搜索潜在客户，AI 自动提取联系方式
+          通过行业和关键词搜索潜在客户，并结合地域偏置过滤更相关的官网结果
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as "domain" | "industry")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="domain">按域名挖掘</TabsTrigger>
-              <TabsTrigger value="industry">按行业/关键词</TabsTrigger>
-            </TabsList>
+          <div className="space-y-2">
+            <Label htmlFor="industry">行业 / 产品</Label>
+            <Input
+              id="industry"
+              placeholder="输入细分行业或产品，如: LED照明、太阳能板、汽车零部件"
+              value={industry}
+              onChange={(e) => setIndustry(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {[
+                "电子产品", "机械设备", "纺织服装", "化工原料",
+                "汽车配件", "家居家具", "食品饮料", "医疗器械",
+                "LED照明", "太阳能", "包装材料", "五金工具",
+              ].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setIndustry(tag)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    industry === tag
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted hover:bg-muted/80 border-transparent"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
 
-            <TabsContent value="domain" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="domain">公司域名</Label>
-                <Input
-                  id="domain"
-                  placeholder="example.com"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="industry" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="industry">行业 / 产品</Label>
-                <Input
-                  id="industry"
-                  placeholder="输入细分行业或产品，如: LED照明、太阳能板、汽车零部件"
-                  value={industry}
-                  onChange={(e) => setIndustry(e.target.value)}
-                />
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {[
-                    "电子产品", "机械设备", "纺织服装", "化工原料",
-                    "汽车配件", "家居家具", "食品饮料", "医疗器械",
-                    "LED照明", "太阳能", "包装材料", "五金工具",
-                  ].map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => setIndustry(tag)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                        industry === tag
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-muted hover:bg-muted/80 border-transparent"
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="keywords">关键词</Label>
-                <Input
-                  id="keywords"
-                  placeholder="如: solar panel distributor"
-                  value={keywords}
-                  onChange={(e) => setKeywords(e.target.value)}
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
+          <div className="space-y-2">
+            <Label htmlFor="keywords">关键词</Label>
+            <Input
+              id="keywords"
+              placeholder="如: solar panel distributor"
+              value={keywords}
+              onChange={(e) => setKeywords(e.target.value)}
+            />
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>搜索逻辑：行业 / 关键词 + 国家 + 固定意图词。</p>
+              <p>固定意图词：中文自动追加“厂家 / 工厂 / 供应商 / 官网”，英文自动追加“manufacturer / supplier / official site”。</p>
+              <p>关键词包含中文时会按 `zh-CN` 搜索；填写国家时会按对应地域做搜索偏置。</p>
+              <p>示例：`LED lighting + USA` 会接近搜索 `LED lighting USA manufacturer OR supplier OR official site`。</p>
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

@@ -1,7 +1,29 @@
 import { db } from "@/lib/db";
-import { emails, followupSequences, campaigns, prospects } from "@/lib/db/schema";
-import { eq, and, lt, isNull, sql } from "drizzle-orm";
+import { emails, followupSequences, campaigns, prospects, emailTemplates } from "@/lib/db/schema";
+import { eq, and, lt, isNull, inArray } from "drizzle-orm";
 import { getAIProviderWithConfig, buildFollowupPrompt } from "@/lib/ai";
+import { getFromAddress } from "@/lib/integrations/resend";
+
+const FOLLOWUP_ELIGIBLE_EMAIL_STATUSES = ["sent", "delivered", "opened", "clicked"] as const;
+
+function normalizeFollowupSteps(
+  steps: {
+    stepNumber: number;
+    delayDays: number;
+    angle: string;
+    enabled: boolean;
+  }[]
+) {
+  return [...steps]
+    .sort((left, right) => left.stepNumber - right.stepNumber)
+    .map((step, index) => ({
+      campaignId: "",
+      stepNumber: index + 1,
+      delayDays: Math.max(1, step.delayDays),
+      angle: step.angle,
+      enabled: step.enabled,
+    }));
+}
 
 export async function getSequenceConfig(campaignId: string) {
   return db
@@ -27,17 +49,14 @@ export async function saveSequenceConfig(
 
   // Insert new config
   if (steps.length > 0) {
+    const normalizedSteps = normalizeFollowupSteps(steps).map((step) => ({
+      ...step,
+      campaignId,
+    }));
+
     await db
       .insert(followupSequences)
-      .values(
-        steps.map((s) => ({
-          campaignId,
-          stepNumber: s.stepNumber,
-          delayDays: s.delayDays,
-          angle: s.angle,
-          enabled: s.enabled,
-        }))
-      );
+      .values(normalizedSteps);
   }
 }
 
@@ -46,7 +65,13 @@ export async function processPendingFollowups() {
 
   // Find all active campaigns with follow-up sequences
   const activeCampaigns = await db
-    .select({ id: campaigns.id, aiProvider: campaigns.aiProvider, aiConfig: campaigns.aiConfig })
+    .select({
+      id: campaigns.id,
+      aiProvider: campaigns.aiProvider,
+      aiConfig: campaigns.aiConfig,
+      templateId: campaigns.templateId,
+      fromEmail: campaigns.fromEmail,
+    })
     .from(campaigns)
     .where(eq(campaigns.status, "active"));
 
@@ -65,8 +90,10 @@ export async function processPendingFollowups() {
       // - This step not yet sent
       const cutoffDate = new Date(now);
       cutoffDate.setDate(cutoffDate.getDate() - seq.delayDays);
+      const previousEmailStepNumber = seq.stepNumber;
+      const followupEmailStepNumber = seq.stepNumber + 1;
 
-      // Find initial emails (step 1) that need this follow-up step
+      // Each follow-up round N is scheduled off the previous email step N.
       const eligibleEmails = await db
         .select({
           id: emails.id,
@@ -79,9 +106,9 @@ export async function processPendingFollowups() {
         .where(
           and(
             eq(emails.campaignId, campaign.id),
-            eq(emails.stepNumber, seq.stepNumber - 1 || 1), // Previous step
+            eq(emails.stepNumber, previousEmailStepNumber),
             lt(emails.sentAt, cutoffDate),
-            eq(emails.status, "sent"), // Was sent successfully
+            inArray(emails.status, FOLLOWUP_ELIGIBLE_EMAIL_STATUSES),
             isNull(emails.repliedAt) // No reply yet
           )
         );
@@ -95,7 +122,7 @@ export async function processPendingFollowups() {
             and(
               eq(emails.campaignId, campaign.id),
               eq(emails.prospectId, email.prospectId),
-              eq(emails.stepNumber, seq.stepNumber)
+              eq(emails.stepNumber, followupEmailStepNumber)
             )
           )
           .limit(1);
@@ -138,7 +165,7 @@ export async function processPendingFollowups() {
               campaignId: campaign.id,
               prospectId: email.prospectId,
               templateId: seq.templateId,
-              stepNumber: seq.stepNumber,
+              stepNumber: followupEmailStepNumber,
               subject: result.subject,
               body: result.body,
               status: "queued",
@@ -147,8 +174,10 @@ export async function processPendingFollowups() {
 
           // Send the follow-up
           const { sendEmail } = await import("@/lib/integrations/resend");
-          const fromAddress =
-            process.env.RESEND_FROM_EMAIL || "noreply@localhost";
+          const fromAddress = await resolveFollowupFromEmail(
+            campaign.fromEmail || null,
+            seq.templateId || campaign.templateId || null
+          );
           const html = (result.body || "")
             .replace(/\n\n/g, "</p><p>")
             .replace(/\n/g, "<br/>")
@@ -188,4 +217,27 @@ export async function processPendingFollowups() {
   }
 
   return { totalProcessed };
+}
+
+async function resolveFollowupFromEmail(
+  campaignFromEmail: string | null,
+  templateId: string | null
+) {
+  if (campaignFromEmail) {
+    return campaignFromEmail;
+  }
+
+  if (templateId) {
+    const [template] = await db
+      .select({ senderEmail: emailTemplates.senderEmail })
+      .from(emailTemplates)
+      .where(eq(emailTemplates.id, templateId))
+      .limit(1);
+
+    if (template?.senderEmail) {
+      return template.senderEmail;
+    }
+  }
+
+  return getFromAddress();
 }

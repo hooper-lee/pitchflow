@@ -1,12 +1,14 @@
 import { db } from "@/lib/db";
-import { prospects, systemConfigs } from "@/lib/db/schema";
+import { prospects, systemConfigs, prospectResearch, prospectScores } from "@/lib/db/schema";
 import { eq, and, ilike, desc, count, or, sql } from "drizzle-orm";
-import { discoverEmails as hunterDiscover } from "@/lib/integrations/hunter";
-import { discoverEmails as snovDiscover } from "@/lib/integrations/snovio";
+import { discoverEmails as hunterDiscover, type HunterEmailResult } from "@/lib/integrations/hunter";
+import { discoverEmails as snovDiscover, type SnovEmailResult } from "@/lib/integrations/snovio";
 import { inferEmailPattern } from "@/lib/utils/email-patterns";
 import { searchCompany } from "@/lib/integrations/serpapi";
-import { detectOfficialWebsite, extractContacts } from "@/lib/detector";
+import { detectOfficialWebsite, extractContacts, getDetectorConfig } from "@/lib/detector";
 import { MINIMUM_SCORE_THRESHOLD } from "@/lib/detector/constants";
+import { fetchPage } from "@/lib/detector/fetcher";
+import { extractSignals } from "@/lib/detector/signals";
 
 async function getEnabledProviders(): Promise<("hunter" | "snovio")[]> {
   try {
@@ -50,6 +52,29 @@ interface ListProspectsParams {
   limit?: number;
   search?: string;
   status?: string;
+  leadGrade?: "A" | "B" | "C" | "D";
+}
+
+type ProspectStatus = typeof prospects.status.enumValues[number];
+type LegacyProspectStatus = ProspectStatus | "researching" | "researched";
+type NormalizedProspectStatus = ProspectStatus;
+
+function normalizeProspectStatus(
+  status: LegacyProspectStatus | null | undefined
+): NormalizedProspectStatus {
+  if (!status || status === "researching" || status === "researched") {
+    return "new";
+  }
+
+  return status;
+}
+
+interface DiscoveredEmailCandidate {
+  contactName?: string;
+  email: string;
+  linkedinUrl?: string;
+  source: "hunter" | "snovio" | "detector";
+  metadata?: Record<string, unknown>;
 }
 
 export async function listProspects({
@@ -58,6 +83,7 @@ export async function listProspects({
   limit = 20,
   search,
   status,
+  leadGrade,
 }: ListProspectsParams) {
   const conditions = [eq(prospects.tenantId, tenantId)];
 
@@ -72,24 +98,76 @@ export async function listProspects({
   }
 
   if (status) {
-    conditions.push(eq(prospects.status, status as any));
+    if (status === "research") {
+      conditions.push(
+        or(
+          eq(prospectResearch.status, "processing"),
+          eq(prospectResearch.status, "completed")
+        )!
+      );
+    } else {
+      conditions.push(eq(prospects.status, status as NormalizedProspectStatus));
+    }
+  }
+
+  if (leadGrade) {
+    conditions.push(eq(prospectScores.leadGrade, leadGrade));
   }
 
   const where = and(...conditions);
 
-  const [items, [{ total }]] = await Promise.all([
-    db
-      .select()
-      .from(prospects)
-      .where(where)
-      .orderBy(desc(prospects.createdAt))
-      .limit(limit)
-      .offset((page - 1) * limit),
-    db.select({ total: count() }).from(prospects).where(where),
-  ]);
+  // 查询 prospects 并 left join research 和 scores
+  const items = await db
+    .select({
+      // prospects 表字段
+      id: prospects.id,
+      companyName: prospects.companyName,
+      contactName: prospects.contactName,
+      email: prospects.email,
+      industry: prospects.industry,
+      country: prospects.country,
+      companyScore: prospects.companyScore,
+      matchScore: prospects.matchScore,
+      status: prospects.status,
+      source: prospects.source,
+      createdAt: prospects.createdAt,
+      website: prospects.website,
+      // prospect_research 字段
+      researchStatus: prospectResearch.status,
+      aiSummary: prospectResearch.aiSummary,
+      employeeCount: prospectResearch.employeeCount,
+      companyType: prospectResearch.companyType,
+      // prospect_scores 字段
+      websiteScore: prospectScores.websiteScore,
+      icpFitScore: prospectScores.icpFitScore,
+      buyingIntentScore: prospectScores.buyingIntentScore,
+      reachabilityScore: prospectScores.reachabilityScore,
+      dealPotentialScore: prospectScores.dealPotentialScore,
+      riskPenaltyScore: prospectScores.riskPenaltyScore,
+      overallScore: prospectScores.overallScore,
+      leadGrade: prospectScores.leadGrade,
+      priorityLevel: prospectScores.priorityLevel,
+      recommendedAction: prospectScores.recommendedAction,
+    })
+    .from(prospects)
+    .leftJoin(prospectResearch, eq(prospects.id, prospectResearch.prospectId))
+    .leftJoin(prospectScores, eq(prospects.id, prospectScores.prospectId))
+    .where(where)
+    .orderBy(desc(prospects.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(prospects)
+    .leftJoin(prospectScores, eq(prospects.id, prospectScores.prospectId))
+    .where(where);
 
   return {
-    items,
+    items: items.map((item) => ({
+      ...item,
+      status: normalizeProspectStatus(item.status),
+    })),
     total: Number(total),
     page,
     limit,
@@ -104,7 +182,71 @@ export async function getProspect(id: string, tenantId: string) {
     .where(and(eq(prospects.id, id), eq(prospects.tenantId, tenantId)))
     .limit(1);
 
-  return prospect || null;
+  if (!prospect) {
+    return null;
+  }
+
+  return {
+    ...prospect,
+    status: normalizeProspectStatus(prospect.status),
+  };
+}
+
+export async function getProspectContacts(prospectId: string, tenantId: string) {
+  const currentProspect = await getProspect(prospectId, tenantId);
+  if (!currentProspect) {
+    return [];
+  }
+
+  const identifierConditions = [];
+  if (currentProspect.website) {
+    identifierConditions.push(eq(prospects.website, currentProspect.website));
+  }
+  if (currentProspect.companyName) {
+    identifierConditions.push(eq(prospects.companyName, currentProspect.companyName));
+  }
+
+  if (identifierConditions.length === 0) {
+    return [
+      {
+        id: currentProspect.id,
+        contactName: currentProspect.contactName,
+        email: currentProspect.email,
+        linkedinUrl: currentProspect.linkedinUrl,
+        createdAt: currentProspect.createdAt,
+      },
+    ];
+  }
+
+  const relatedProspects = await db
+    .select({
+      id: prospects.id,
+      contactName: prospects.contactName,
+      email: prospects.email,
+      linkedinUrl: prospects.linkedinUrl,
+      createdAt: prospects.createdAt,
+    })
+    .from(prospects)
+    .where(
+      and(eq(prospects.tenantId, tenantId), or(...identifierConditions)!)
+    )
+    .orderBy(desc(prospects.createdAt));
+
+  const seen = new Set<string>();
+  return relatedProspects.filter((contact) => {
+    const key = [
+      contact.email?.toLowerCase() || "",
+      contact.contactName?.toLowerCase() || "",
+      contact.linkedinUrl || "",
+    ].join("|");
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return Boolean(contact.contactName || contact.email || contact.linkedinUrl);
+  });
 }
 
 export async function createProspect(
@@ -193,16 +335,58 @@ export async function discoverProspects(
   const searchDepth = Math.max(limit * 3, 20);
 
   if (params.domain) {
-    // Domain-based discovery — try providers in order
-    const discoveredEmails: Map<string, any> = new Map();
+    const normalizedDomain = params.domain
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "")
+      .trim()
+      .toLowerCase();
+    const websiteUrl = `https://${normalizedDomain}`;
+    const discoveredEmails = new Map<string, DiscoveredEmailCandidate>();
+    let companyNameFromSite: string | undefined;
+    let directMetadata: Record<string, unknown> | undefined;
+
+    try {
+      const detectorConfig = await getDetectorConfig();
+      const urlsToProbe = [websiteUrl, `${websiteUrl}/contact`, `${websiteUrl}/about`];
+
+      for (const url of urlsToProbe) {
+        const fetchResult = await fetchPage(url, detectorConfig);
+        if (fetchResult.httpStatus !== 200 || fetchResult.error) {
+          continue;
+        }
+
+        const signals = extractSignals(fetchResult, normalizedDomain, detectorConfig);
+        const contacts = extractContacts(signals);
+        companyNameFromSite = companyNameFromSite || contacts.companyName || undefined;
+        directMetadata = {
+          directFetch: true,
+          fetchMethod: signals.fetchMethod,
+          phones: contacts.phones,
+          addresses: contacts.addresses,
+          socialLinks: contacts.socialLinks,
+        };
+
+        for (const email of contacts.emails) {
+          if (!discoveredEmails.has(email)) {
+            discoveredEmails.set(email, {
+              email,
+              source: "detector",
+              metadata: directMetadata,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Direct domain extraction failed:", error);
+    }
 
     for (const provider of providers) {
-      if (discoveredEmails.size >= limit) break;
+      if (discoveredEmails.size > 0) break;
 
       try {
         if (provider === "hunter") {
-          const results = await hunterDiscover(params.domain, {
-            limit: limit - discoveredEmails.size,
+          const results = await hunterDiscover(normalizedDomain, {
+            limit,
           });
           for (const email of results) {
             if (email.value && !discoveredEmails.has(email.value)) {
@@ -223,8 +407,8 @@ export async function discoverProspects(
             }
           }
         } else if (provider === "snovio") {
-          const results = await snovDiscover(params.domain, {
-            limit: limit - discoveredEmails.size,
+          const results = await snovDiscover(normalizedDomain, {
+            limit,
           });
           for (const item of results) {
             if (item.email && !discoveredEmails.has(item.email)) {
@@ -253,16 +437,18 @@ export async function discoverProspects(
         .insert(prospects)
         .values({
           tenantId,
-          companyName: params.domain,
+          companyName: companyNameFromSite || normalizedDomain,
           contactName: data.contactName,
           email: data.email,
           linkedinUrl: data.linkedinUrl,
           industry: params.industry,
-          country: params.country,
-          website: `https://${params.domain}`,
+          website: websiteUrl,
           source: data.source,
           status: "new",
-          metadata: data.metadata,
+          metadata: {
+            ...(directMetadata || {}),
+            ...(data.metadata || {}),
+          },
         })
         .returning();
 
@@ -271,18 +457,18 @@ export async function discoverProspects(
 
     // If nothing found, create placeholder with inferred email
     if (created.length === 0) {
-      const inferred = inferEmailPattern("contact", "", params.domain);
+      const inferred = inferEmailPattern("contact", "", normalizedDomain);
       const [prospect] = await db
         .insert(prospects)
         .values({
           tenantId,
-          companyName: params.domain,
+          companyName: companyNameFromSite || normalizedDomain,
           email: inferred,
           industry: params.industry,
-          country: params.country,
-          website: `https://${params.domain}`,
-          source: "pattern_inference",
+          website: websiteUrl,
+          source: "detector+inferred",
           status: "new",
+          metadata: directMetadata,
         })
         .returning();
 
@@ -312,7 +498,7 @@ export async function discoverProspects(
     if (searchResults.length === 0) return created;
 
     // Use detector to find official websites
-    const detectorResult = await detectOfficialWebsite(searchQuery, searchResults, undefined, limit);
+    const detectorResult = await detectOfficialWebsite(searchQuery, searchResults);
     console.log(`[discover] Detector: passedFilter=${detectorResult.passedFilter}, fetched=${detectorResult.fetchedSuccessfully}, candidates=${detectorResult.allCandidates.length}, winner=${detectorResult.winner ? 'yes' : 'no'}`);
 
     // Loop over all scored candidates (already sorted by score desc)
@@ -376,10 +562,14 @@ export async function discoverProspects(
           try {
             if (provider === "hunter") {
               const results = await hunterDiscover(domain, { limit: 2 });
-              fallbackEmails = results.map((r: any) => r.value).filter(Boolean);
+              fallbackEmails = results
+                .map((r: HunterEmailResult) => r.value)
+                .filter(Boolean);
             } else if (provider === "snovio") {
               const results = await snovDiscover(domain, { limit: 2 });
-              fallbackEmails = results.map((r: any) => r.email).filter(Boolean);
+              fallbackEmails = results
+                .map((r: SnovEmailResult) => r.email)
+                .filter(Boolean);
             }
           } catch {
             // provider failed, continue

@@ -8,7 +8,6 @@ import { extractContacts } from "./extractor";
 import {
   MINIMUM_SCORE_THRESHOLD,
   MAX_CONCURRENT_FETCHES,
-  MAX_CANDIDATES_TO_FETCH,
 } from "./constants";
 
 async function processInBatches<T, R>(
@@ -28,8 +27,7 @@ async function processInBatches<T, R>(
 export async function detectOfficialWebsite(
   searchQuery: string,
   candidates: SearchCandidate[],
-  config?: DetectorConfig,
-  maxFetch?: number
+  config?: DetectorConfig
 ): Promise<DetectorResult> {
   const detectorConfig = config || (await getDetectorConfig());
 

@@ -89,21 +89,26 @@ export async function generateEmail({
 
 export async function researchProspect({
   prompt,
+  systemPrompt,
+  maxTokens = 4096,
   overrides,
 }: {
   prompt: string;
   model?: string;
+  systemPrompt?: string;
+  maxTokens?: number;
   overrides?: CustomAIOverrides;
 }): Promise<string> {
   const { client, model } = await getClient(overrides);
 
   const completion = await client.chat.completions.create({
     model,
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     messages: [
       {
         role: "system",
         content:
+          systemPrompt ||
           "You are a business intelligence analyst. Provide detailed, structured analysis.",
       },
       { role: "user", content: prompt },

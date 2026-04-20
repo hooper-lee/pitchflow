@@ -47,6 +47,19 @@ async function getFromAddress(): Promise<string> {
   return process.env.RESEND_FROM_EMAIL || "noreply@localhost";
 }
 
+export async function getMaskedFromAddress(): Promise<string> {
+  const fromAddress = await getFromAddress();
+  const match = fromAddress.match(/^([^@]+)@(.+)$/);
+  if (!match) return fromAddress;
+
+  const [, localPart, domain] = match;
+  if (localPart.length <= 2) {
+    return `${localPart[0] || "*"}*@${domain}`;
+  }
+
+  return `${localPart.slice(0, 2)}***@${domain}`;
+}
+
 async function getResendClient(): Promise<Resend> {
   if (!resendClient) {
     const apiKey = await getApiKey();

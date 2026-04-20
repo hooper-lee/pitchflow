@@ -6,6 +6,7 @@ import {
   saveSequenceConfig,
 } from "@/lib/services/followup.service";
 import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
+import { logAuditEvent } from "@/lib/services/audit.service";
 
 export async function GET(
   request: NextRequest,
@@ -28,12 +29,21 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { tenantId } = await requireTenant();
+    const { user, tenantId } = await requireTenant();
     const campaign = await getCampaign(params.id, tenantId);
     if (!campaign) return apiError("Campaign not found", 404);
 
     const body = await request.json();
     await saveSequenceConfig(params.id, body.steps || []);
+    await logAuditEvent({
+      userId: user.id,
+      tenantId,
+      action: "update_followups",
+      resource: "campaign",
+      resourceId: params.id,
+      detail: { steps: body.steps || [] },
+      ip: request.headers.get("x-forwarded-for") || null,
+    });
     return apiResponse({ success: true });
   } catch (error) {
     return handleApiError(error);

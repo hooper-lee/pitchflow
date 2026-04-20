@@ -26,12 +26,20 @@ export const planEnum = pgEnum("plan", ["free", "pro", "enterprise"]);
 
 export const prospectStatusEnum = pgEnum("prospect_status", [
   "new",
-  "researched",
   "contacted",
   "replied",
   "converted",
   "bounced",
   "unsubscribed",
+]);
+
+export const leadGradeEnum = pgEnum("lead_grade", ["A", "B", "C", "D"]);
+
+export const researchStatusEnum = pgEnum("research_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
 ]);
 
 export const campaignStatusEnum = pgEnum("campaign_status", [
@@ -156,6 +164,7 @@ export const emailTemplates = pgTable(
     angle: varchar("angle", { length: 100 }),
     productName: varchar("product_name", { length: 255 }),
     senderName: varchar("sender_name", { length: 255 }),
+    senderEmail: varchar("sender_email", { length: 255 }),
     attachments: jsonb("attachments"),
     isDefault: boolean("is_default").default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -198,6 +207,103 @@ export const prospects = pgTable(
   })
 );
 
+// AI 调研信息表 - 存储 AI 抽取的结构化字段
+export const prospectResearch = pgTable(
+  "prospect_research",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references(() => prospects.id, { onDelete: "cascade" }),
+    // 调研状态
+    status: researchStatusEnum("status").default("pending").notNull(),
+    // AI 生成的调研总结（原始）
+    aiSummary: text("ai_summary"),
+    // 结构化字段 - 公司概况
+    companyDescription: text("company_description"), // 公司描述
+    foundingYear: integer("founding_year"), // 成立年份
+    employeeCount: varchar("employee_count", { length: 50 }), // 员工规模
+    companyType: varchar("company_type", { length: 100 }), // 公司类型 (manufacturer, distributor, etc.)
+    businessModel: varchar("business_model", { length: 100 }), // 商业模式
+    // 结构化字段 - 产品/服务
+    mainProducts: jsonb("main_products").$type<string[]>(), // 主要产品
+    productCategories: jsonb("product_categories").$type<string[]>(), // 产品类别
+    productionCapacity: text("production_capacity"), // 产能
+    certifications: jsonb("certifications").$type<string[]>(), // 资质认证
+    // 结构化字段 - 市场
+    targetMarkets: jsonb("target_markets").$type<string[]>(), // 目标市场
+    exportRegions: jsonb("export_regions").$type<string[]>(), // 出口地区
+    keyMarkets: jsonb("key_markets").$type<string[]>(), // 主要市场
+    // 结构化字段 - 采购
+    procurementKeywords: jsonb("procurement_keywords").$type<string[]>(), // 采购关键词
+    typicalOrderValue: varchar("typical_order_value", { length: 100 }), // 常规订单金额
+    supplierCriteria: text("supplier_criteria"), // 供应商选择标准
+    // 结构化字段 - 联系方式
+    decisionMakers: jsonb("decision_makers").$type<
+      { name: string; position: string; linkedin?: string }[]
+    >(), // 决策人
+    phoneNumbers: jsonb("phone_numbers").$type<string[]>(), // 电话
+    addresses: jsonb("addresses").$type<string[]>(), // 地址
+    // 结构化字段 - 社交媒体
+    socialMedia: jsonb("social_media").$type<
+      Record<string, string>
+    >(), // 社交媒体链接
+    // AI 原始输出（用于调试/重算）
+    rawAiOutput: jsonb("raw_ai_output").$type<Record<string, unknown>>(),
+    // 错误信息
+    errorMessage: text("error_message"),
+    // 时间戳
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    prospectUnique: uniqueIndex("prospect_research_prospect_unique").on(table.prospectId),
+    prospectIdx: index("prospect_research_prospect_idx").on(table.prospectId),
+    statusIdx: index("prospect_research_status_idx").on(table.status),
+  })
+);
+
+// AI 评分表 - 存储5维度评分和等级
+export const prospectScores = pgTable(
+  "prospect_scores",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references(() => prospects.id, { onDelete: "cascade" })
+      .unique(),
+    // 官网评分（原有字段，保留）
+    websiteScore: integer("website_score"),
+    websiteDimensions: jsonb("website_dimensions").$type<
+      Record<string, number>
+    >(),
+    // 5维度评分 (0-100)
+    icpFitScore: integer("icp_fit_score"), // ICP匹配度
+    buyingIntentScore: integer("buying_intent_score"), // 采购意向
+    reachabilityScore: integer("reachability_score"), // 可触达性
+    dealPotentialScore: integer("deal_potential_score"), // 成交潜力
+    riskPenaltyScore: integer("risk_penalty_score"), // 风险扣分
+    // 综合评分 (0-100)
+    overallScore: integer("overall_score"),
+    // 客户分层
+    leadGrade: leadGradeEnum("leadGrade"), // A/B/C/D
+    priorityLevel: integer("priority_level"), // 优先级 (1-5)
+    // 推荐动作
+    recommendedAction: text("recommended_action"), // 推荐的开发动作
+    actionReason: text("action_reason"), // 推荐理由
+    // AI 评分原始输出
+    rawAiOutput: jsonb("raw_ai_output").$type<Record<string, unknown>>(),
+    // 时间戳
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    prospectIdx: index("prospect_scores_prospect_idx").on(table.prospectId),
+    leadGradeIdx: index("prospect_scores_lead_grade_idx").on(table.leadGrade),
+    overallScoreIdx: index("prospect_scores_overall_idx").on(table.overallScore),
+  })
+);
+
 export const campaigns = pgTable(
   "campaigns",
   {
@@ -209,6 +315,7 @@ export const campaigns = pgTable(
     industry: varchar("industry", { length: 255 }),
     targetPersona: varchar("target_persona", { length: 255 }),
     templateId: uuid("template_id").references(() => emailTemplates.id),
+    fromEmail: varchar("from_email", { length: 255 }),
     aiProvider: aiProviderEnum("ai_provider").default("custom"),
     aiConfig: jsonb("ai_config"),
     status: campaignStatusEnum("status").default("draft").notNull(),

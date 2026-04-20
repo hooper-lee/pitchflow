@@ -107,7 +107,7 @@ export function FollowUpConfig({
       <CardHeader>
         <CardTitle>跟进序列</CardTitle>
         <CardDescription>
-          配置自动跟进步骤，AI 将为每个步骤换角度生成邮件
+          配置第 1、2、3 轮自动跟进，系统会基于上一封已发送邮件继续生成下一轮内容
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -123,7 +123,7 @@ export function FollowUpConfig({
                   updateStep(index, { enabled: checked })
                 }
               />
-              <span className="text-sm font-medium">步骤 {step.stepNumber}</span>
+              <span className="text-sm font-medium">第 {step.stepNumber} 轮跟进</span>
             </div>
 
             <div className="flex items-center gap-2">

@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ArrowLeft, Copy, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Copy } from "lucide-react";
 import Link from "next/link";
 
 interface ApiKey {

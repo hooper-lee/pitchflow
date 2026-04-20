@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ import { Loader2, Check } from "lucide-react";
 interface Template {
   id: string;
   name: string;
+  senderEmail?: string | null;
 }
 
 interface Prospect {
@@ -34,9 +36,14 @@ interface Prospect {
   email: string | null;
   industry: string | null;
   status: string;
+  researchStatus?: string | null;
+  leadGrade?: string | null;
+  overallScore?: number | null;
+  companyScore?: number | null;
 }
 
 export function CampaignForm() {
+  const { data: session } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -44,6 +51,7 @@ export function CampaignForm() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [prospectSearch, setProspectSearch] = useState("");
+  const [leadGradeFilter, setLeadGradeFilter] = useState("all");
   const [adminModelConfigured, setAdminModelConfigured] = useState(false);
   const [plan, setPlan] = useState<string>("free");
   const [name, setName] = useState("");
@@ -54,6 +62,7 @@ export function CampaignForm() {
   const [customBaseURL, setCustomBaseURL] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
   const [customModel, setCustomModel] = useState("");
+  const [fromAddress, setFromAddress] = useState("");
 
   useEffect(() => {
     fetch("/api/v1/templates")
@@ -75,6 +84,7 @@ export function CampaignForm() {
         const configured = data.data?.aiModel || false;
         setAdminModelConfigured(configured);
         if (configured) setAiProvider("custom");
+        setFromAddress(data.data?.fromAddress || "");
       })
       .catch(() => {});
 
@@ -85,8 +95,18 @@ export function CampaignForm() {
   }, []);
 
   const isUserCustom = aiProvider === "_user_custom";
+  const selectedTemplate = templates.find((template) => template.id === templateId);
+  const displayedFromAddress =
+    selectedTemplate?.senderEmail ||
+    session?.user?.email ||
+    fromAddress ||
+    "未配置";
 
   const filteredProspects = prospects.filter((p) => {
+    if (leadGradeFilter !== "all" && p.leadGrade !== leadGradeFilter) {
+      return false;
+    }
+
     if (!prospectSearch) return true;
     const q = prospectSearch.toLowerCase();
     return (
@@ -117,7 +137,7 @@ export function CampaignForm() {
     setLoading(true);
 
     try {
-      const body: Record<string, any> = {
+      const body: Record<string, unknown> = {
         name,
         industry: industry || undefined,
         targetPersona: targetPersona || undefined,
@@ -168,7 +188,7 @@ export function CampaignForm() {
       <CardHeader>
         <CardTitle>创建营销活动</CardTitle>
         <CardDescription>
-          配置活动参数，AI 将为每个客户生成个性化邮件
+          未选择模板时默认使用当前账号邮箱；选择模板后优先使用模板内配置的发件邮箱
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -265,6 +285,18 @@ export function CampaignForm() {
             </div>
           </div>
 
+          <div className="space-y-2 rounded-lg border bg-muted/30 px-4 py-3">
+            <Label className="text-sm">当前发件邮箱</Label>
+            <p className="text-sm font-medium text-foreground">
+              {displayedFromAddress}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {selectedTemplate?.senderEmail
+                ? "当前已选择模板，活动会优先使用模板里配置的发件邮箱。"
+                : "当前未选择模板，活动发送默认使用你的账号邮箱。"}
+            </p>
+          </div>
+
           {isUserCustom && (
             <Card className="border-dashed">
               <CardHeader className="pb-2">
@@ -336,11 +368,25 @@ export function CampaignForm() {
                 </p>
               ) : (
                 <>
-                  <Input
-                    placeholder="搜索客户（公司名、联系人、邮箱、行业）"
-                    value={prospectSearch}
-                    onChange={(e) => setProspectSearch(e.target.value)}
-                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select value={leadGradeFilter} onValueChange={setLeadGradeFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="调研评分等级" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部评分等级</SelectItem>
+                        <SelectItem value="A">A 级</SelectItem>
+                        <SelectItem value="B">B 级</SelectItem>
+                        <SelectItem value="C">C 级</SelectItem>
+                        <SelectItem value="D">D 级</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      placeholder="搜索客户（公司名、联系人、邮箱、行业）"
+                      value={prospectSearch}
+                      onChange={(e) => setProspectSearch(e.target.value)}
+                    />
+                  </div>
                   <div className="max-h-[300px] overflow-y-auto space-y-1 border rounded-md p-2">
                     {filteredProspects.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">无匹配客户</p>
@@ -369,6 +415,19 @@ export function CampaignForm() {
                             </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {p.email} {p.industry ? `· ${p.industry}` : ""}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {[
+                                p.leadGrade ? `调研等级 ${p.leadGrade}` : "未评分",
+                                p.overallScore !== null && p.overallScore !== undefined
+                                  ? `调研分 ${p.overallScore}`
+                                  : null,
+                                p.companyScore !== null && p.companyScore !== undefined
+                                  ? `搜索分 ${p.companyScore}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </div>
                           </div>
                         </div>

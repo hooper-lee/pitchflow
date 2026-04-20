@@ -6,7 +6,12 @@ export type AIProviderType = "claude" | "openai" | "custom";
 
 export interface AIProvider {
   generateEmail(params: claude.GenerateEmailParams): Promise<claude.GeneratedEmail>;
-  researchProspect(params: { prompt: string; model?: string }): Promise<string>;
+  researchProspect(params: {
+    prompt: string;
+    model?: string;
+    systemPrompt?: string;
+    maxTokens?: number;
+  }): Promise<string>;
 }
 
 const providers: Record<AIProviderType, AIProvider> = {

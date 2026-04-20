@@ -1,6 +1,5 @@
-import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { emails, campaigns, prospects } from "@/lib/db/schema";
+import { emails, campaigns } from "@/lib/db/schema";
 import { eq, count, and, gte, sql, desc, isNotNull } from "drizzle-orm";
 import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
 

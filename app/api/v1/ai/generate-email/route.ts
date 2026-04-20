@@ -3,9 +3,11 @@ import { requireTenant } from "@/lib/auth";
 import { getAIProviderWithConfig, buildOutreachPrompt, buildFollowupPrompt } from "@/lib/ai";
 import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
 
+type AIProvider = "claude" | "openai" | "custom";
+
 export async function POST(request: NextRequest) {
   try {
-    const { tenantId } = await requireTenant();
+    await requireTenant();
     const body = await request.json();
     const {
       provider = "custom",
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest) {
       stepNumber,
     } = body;
 
-    const ai = getAIProviderWithConfig(provider as any);
+    const ai = getAIProviderWithConfig(provider as AIProvider);
 
     let prompt: string;
     if (type === "followup") {

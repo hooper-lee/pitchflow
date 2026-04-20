@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { tenants, prospects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { searchCompany } from "@/lib/integrations/serpapi";
-import { hunterDomainSearch } from "@/lib/integrations/hunter";
-import { inferEmailFromPattern } from "@/lib/utils/email-patterns";
+import { discoverEmails } from "@/lib/integrations/hunter";
+import { inferEmailPattern } from "@/lib/utils/email-patterns";
 
 export async function POST(request: NextRequest) {
   // Verify cron secret
@@ -36,14 +35,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Discover prospects via Hunter.io
-    const hunterResults = await hunterDomainSearch(domain, limit);
+    const hunterResults = await discoverEmails(domain, { limit });
 
     const discovered: typeof prospects.$inferInsert[] = [];
 
     for (const result of hunterResults) {
       const email =
-        result.email ||
-        inferEmailFromPattern(
+        result.value ||
+        inferEmailPattern(
           result.first_name || "",
           result.last_name || "",
           domain
@@ -62,7 +61,7 @@ export async function POST(request: NextRequest) {
 
       discovered.push({
         tenantId,
-        companyName: result.company || domain,
+        companyName: domain,
         contactName:
           [result.first_name, result.last_name].filter(Boolean).join(" ") ||
           null,

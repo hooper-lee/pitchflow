@@ -12,6 +12,7 @@ import {
   paginationSchema,
 } from "@/lib/utils/validators";
 import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
+import { logAuditEvent } from "@/lib/services/audit.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { tenantId } = await requireTenant();
+    const { user, tenantId } = await requireTenant();
     const body = await request.json();
 
     // Check if it's a discovery request (domain or industry/keywords)
@@ -44,6 +45,19 @@ export async function POST(request: NextRequest) {
         return apiError(quota.message || "Quota exceeded", 403);
       }
       const prospects = await discoverProspects(tenantId, input);
+      await logAuditEvent({
+        userId: user.id,
+        tenantId,
+        action: "discover",
+        resource: "prospect",
+        detail: {
+          domain: input.domain || null,
+          industry: input.industry || null,
+          keywords: input.keywords || null,
+          count: prospects.length,
+        },
+        ip: request.headers.get("x-forwarded-for") || null,
+      });
       return apiResponse(prospects, 201);
     }
 
@@ -53,6 +67,18 @@ export async function POST(request: NextRequest) {
       return apiError(quota.message || "Quota exceeded", 403);
     }
     const prospect = await createProspect(tenantId, input);
+    await logAuditEvent({
+      userId: user.id,
+      tenantId,
+      action: "create",
+      resource: "prospect",
+      resourceId: prospect.id,
+      detail: {
+        companyName: prospect.companyName,
+        email: prospect.email,
+      },
+      ip: request.headers.get("x-forwarded-for") || null,
+    });
     return apiResponse(prospect, 201);
   } catch (error) {
     return handleApiError(error);

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Pause, Play, Trash2 } from "lucide-react";
+import { Eye, Pause, Play } from "lucide-react";
 
 interface Campaign {
   id: string;

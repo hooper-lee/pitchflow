@@ -11,6 +11,10 @@ interface Template {
   subject: string;
   body: string;
   angle: string | null;
+  productName: string | null;
+  senderName: string | null;
+  senderEmail: string | null;
+  attachments: { filename: string; url: string; size?: number }[] | null;
   isDefault: boolean | null;
 }
 

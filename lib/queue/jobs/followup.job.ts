@@ -1,9 +1,7 @@
 import { z } from "zod";
 
 export const followupJobSchema = z.object({
-  campaignId: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  aiProvider: z.enum(["claude", "openai"]).default("claude"),
+  source: z.enum(["cron", "worker"]).default("worker"),
 });
 
 export type FollowupJobData = z.infer<typeof followupJobSchema>;

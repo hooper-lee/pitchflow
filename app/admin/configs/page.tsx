@@ -7,10 +7,57 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, RotateCcw, Sparkles } from "lucide-react";
 
-const CONFIG_SECTIONS = [
+interface ConfigField {
+  key: string;
+  label: string;
+  secret: boolean;
+  placeholder: string;
+  textarea?: boolean;
+  rows?: number;
+  readonly?: boolean;
+}
+
+interface RoutingField {
+  key: string;
+  label: string;
+  dependsOn: string;
+}
+
+interface ConfigSection {
+  title: string;
+  description: string;
+  fields: ConfigField[];
+  routing?: RoutingField[];
+}
+
+const AI_PROMPT_KEYS = {
+  PROSPECT_RESEARCH_SYSTEM: "AI_PROMPT_PROSPECT_RESEARCH_SYSTEM",
+  PROSPECT_SCORING_SYSTEM: "AI_PROMPT_PROSPECT_SCORING_SYSTEM",
+  PROSPECT_RESEARCH_USER: "AI_PROMPT_PROSPECT_RESEARCH_USER",
+  PROSPECT_SCORING_USER: "AI_PROMPT_PROSPECT_SCORING_USER",
+};
+
+const SCORING_WEIGHT_KEYS = {
+  ICP_FIT: "AI_SCORE_WEIGHT_ICP_FIT",
+  BUYING_INTENT: "AI_SCORE_WEIGHT_BUYING_INTENT",
+  REACHABILITY: "AI_SCORE_WEIGHT_REACHABILITY",
+  DEAL_POTENTIAL: "AI_SCORE_WEIGHT_DEAL_POTENTIAL",
+  RISK_PENALTY: "AI_SCORE_WEIGHT_RISK_PENALTY",
+};
+
+const DEFAULT_SCORING_WEIGHTS = {
+  [SCORING_WEIGHT_KEYS.ICP_FIT]: "25",
+  [SCORING_WEIGHT_KEYS.BUYING_INTENT]: "25",
+  [SCORING_WEIGHT_KEYS.REACHABILITY]: "20",
+  [SCORING_WEIGHT_KEYS.DEAL_POTENTIAL]: "20",
+  [SCORING_WEIGHT_KEYS.RISK_PENALTY]: "10",
+};
+
+const CONFIG_SECTIONS: ConfigSection[] = [
   {
     title: "AI 模型",
     description: "配置 AI 模型的 API Key、Base URL 和模型名称（支持 OpenAI 兼容接口）",
@@ -71,6 +118,57 @@ const CONFIG_SECTIONS = [
   },
 ];
 
+const AI_PROMPT_SECTION: ConfigSection = {
+  title: "AI 调研 & 评分提示词",
+  description: "配置 AI 进行客户调研和评分时使用的提示词，修改后实时生效",
+  fields: [
+    {
+      key: AI_PROMPT_KEYS.PROSPECT_RESEARCH_SYSTEM,
+      label: "调研系统提示词",
+      secret: false,
+      placeholder: "You are a B2B business intelligence analyst...",
+      textarea: true,
+      rows: 6,
+    },
+    {
+      key: AI_PROMPT_KEYS.PROSPECT_RESEARCH_USER,
+      label: "调研用户提示词模板",
+      secret: false,
+      placeholder: "Analyze the following company...",
+      textarea: true,
+      rows: 10,
+    },
+    {
+      key: AI_PROMPT_KEYS.PROSPECT_SCORING_SYSTEM,
+      label: "评分系统提示词",
+      secret: false,
+      placeholder: "You are a B2B sales lead scoring expert...",
+      textarea: true,
+      rows: 6,
+    },
+    {
+      key: AI_PROMPT_KEYS.PROSPECT_SCORING_USER,
+      label: "评分用户提示词模板",
+      secret: false,
+      placeholder: "Evaluate this prospect and score them...",
+      textarea: true,
+      rows: 10,
+    },
+  ],
+};
+
+const SCORING_WEIGHT_SECTION: ConfigSection = {
+  title: "客户评分权重",
+  description: "配置综合评分中 5 个维度的权重，建议总和为 100",
+  fields: [
+    { key: SCORING_WEIGHT_KEYS.ICP_FIT, label: "ICP 匹配度", secret: false, placeholder: "25" },
+    { key: SCORING_WEIGHT_KEYS.BUYING_INTENT, label: "采购意向", secret: false, placeholder: "25" },
+    { key: SCORING_WEIGHT_KEYS.REACHABILITY, label: "可触达性", secret: false, placeholder: "20" },
+    { key: SCORING_WEIGHT_KEYS.DEAL_POTENTIAL, label: "成交潜力", secret: false, placeholder: "20" },
+    { key: SCORING_WEIGHT_KEYS.RISK_PENALTY, label: "风险评估", secret: false, placeholder: "10" },
+  ],
+};
+
 export default function AdminConfigsPage() {
   const { toast } = useToast();
   const [configs, setConfigs] = useState<Record<string, string>>({});
@@ -79,12 +177,19 @@ export default function AdminConfigsPage() {
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    fetch("/api/admin/configs")
-      .then((r) => r.json())
-      .then((data) => {
-        const map: Record<string, string> = {};
-        for (const c of data.data || []) {
+    Promise.all([
+      fetch("/api/admin/configs").then((r) => r.json()),
+      fetch("/api/admin/ai-prompts").then((r) => r.json()),
+    ])
+      .then(([configsData, promptsData]) => {
+        const map: Record<string, string> = { ...DEFAULT_SCORING_WEIGHTS };
+        for (const c of configsData.data || []) {
           map[c.key] = c.value;
+        }
+        for (const [key, value] of Object.entries(promptsData.data || {})) {
+          if (value && typeof value === "object" && "value" in value) {
+            map[key] = String(value.value);
+          }
         }
         setConfigs(map);
       })
@@ -92,12 +197,18 @@ export default function AdminConfigsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const getValue = (key: string) => configs[key] || "";
+  const getValue = (key: string) => configs[key] || DEFAULT_SCORING_WEIGHTS[key as keyof typeof DEFAULT_SCORING_WEIGHTS] || "";
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const promises = CONFIG_SECTIONS.flatMap((section) =>
+      const sectionsToSave = [
+        ...CONFIG_SECTIONS,
+        AI_PROMPT_SECTION,
+        SCORING_WEIGHT_SECTION,
+      ];
+
+      const promises = sectionsToSave.flatMap((section) =>
         section.fields
           .filter((f) => !f.readonly && configs[f.key] !== undefined && configs[f.key] !== "")
           .map((f) =>
@@ -132,6 +243,11 @@ export default function AdminConfigsPage() {
     }
   };
 
+  const scoringWeightTotal = SCORING_WEIGHT_SECTION.fields.reduce(
+    (sum, field) => sum + Number(getValue(field.key) || 0),
+    0
+  );
+
   const toggleSecret = (key: string) => {
     setShowSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -147,14 +263,43 @@ export default function AdminConfigsPage() {
     );
   }
 
+  // 重置 AI Prompt 为默认值
+  const handleResetPrompts = async () => {
+    if (!confirm("确定要将所有 AI Prompt 重置为默认值吗？")) return;
+    try {
+      const res = await fetch("/api/admin/ai-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset" }),
+      });
+      if (res.ok) {
+        toast({ title: "已重置为默认值" });
+        // 重新加载
+        window.location.reload();
+      }
+    } catch {
+      toast({ title: "重置失败", variant: "destructive" });
+    }
+  };
+
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-4xl space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">系统配置</h1>
         <p className="text-muted-foreground">管理平台 .env 配置项，保存后部分配置需要重启服务生效</p>
       </div>
 
-      {CONFIG_SECTIONS.map((section) => (
+      <Tabs defaultValue="basic" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="basic">基础配置</TabsTrigger>
+          <TabsTrigger value="prompts">
+            <Sparkles className="h-4 w-4 mr-2" />
+            AI 提示词
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="basic" className="space-y-6">
+          {CONFIG_SECTIONS.map((section) => (
         <Card key={section.title}>
           <CardHeader>
             <CardTitle>{section.title}</CardTitle>
@@ -238,9 +383,75 @@ export default function AdminConfigsPage() {
         </Card>
       ))}
 
-      <Button onClick={handleSave} disabled={saving} size="lg">
-        {saving ? "保存中..." : "保存所有配置"}
-      </Button>
+          <Button onClick={handleSave} disabled={saving} size="lg">
+            {saving ? "保存中..." : "保存所有配置"}
+          </Button>
+        </TabsContent>
+
+        {/* AI Prompt 配置 Tab */}
+        <TabsContent value="prompts" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{AI_PROMPT_SECTION.title}</CardTitle>
+              <CardDescription>{AI_PROMPT_SECTION.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {AI_PROMPT_SECTION.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Textarea
+                    id={field.key}
+                    placeholder={field.placeholder}
+                    value={getValue(field.key)}
+                    rows={field.rows || 4}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                    className="font-mono text-sm"
+                  />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{SCORING_WEIGHT_SECTION.title}</CardTitle>
+              <CardDescription>{SCORING_WEIGHT_SECTION.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {SCORING_WEIGHT_SECTION.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Input
+                    id={field.key}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={getValue(field.key)}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                  />
+                </div>
+              ))}
+              <p className={`text-sm ${scoringWeightTotal === 100 ? "text-muted-foreground" : "text-destructive"}`}>
+                当前总和：{scoringWeightTotal}（建议 100）
+              </p>
+            </CardContent>
+          </Card>
+
+          <div className="flex gap-4">
+            <Button onClick={handleSave} disabled={saving} size="lg">
+              {saving ? "保存中..." : "保存提示词"}
+            </Button>
+            <Button variant="outline" onClick={handleResetPrompts}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              重置为默认值
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

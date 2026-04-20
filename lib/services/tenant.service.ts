@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
 import { tenants, users, usageRecords } from "@/lib/db/schema";
-import { eq, and, gte, sql, count } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { PLAN_LIMITS, type Plan } from "@/lib/constants/plans";
+
+type UserRole = typeof users.role.enumValues[number];
 
 export async function getTenant(id: string) {
   const [tenant] = await db
@@ -100,7 +102,7 @@ export async function getTeamMembers(tenantId: string) {
 export async function inviteTeamMember(
   tenantId: string,
   email: string,
-  role: string = "member"
+  role: UserRole = "member"
 ) {
   // Check if user exists
   const [existing] = await db
@@ -113,7 +115,7 @@ export async function inviteTeamMember(
     // Update their tenant
     await db
       .update(users)
-      .set({ tenantId, role: role as any, updatedAt: new Date() })
+      .set({ tenantId, role, updatedAt: new Date() })
       .where(eq(users.id, existing.id));
     return existing;
   }
@@ -123,7 +125,7 @@ export async function inviteTeamMember(
     .insert(users)
     .values({
       email,
-      role: role as any,
+      role,
       tenantId,
     })
     .returning();
@@ -134,11 +136,11 @@ export async function inviteTeamMember(
 export async function updateMemberRole(
   userId: string,
   tenantId: string,
-  role: string
+  role: UserRole
 ) {
   const [user] = await db
     .update(users)
-    .set({ role: role as any, updatedAt: new Date() })
+    .set({ role, updatedAt: new Date() })
     .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
     .returning();
 

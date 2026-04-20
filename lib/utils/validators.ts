@@ -43,6 +43,7 @@ export const createTemplateSchema = z.object({
   angle: z.string().max(100).optional(),
   productName: z.string().max(255).optional(),
   senderName: z.string().max(255).optional(),
+  senderEmail: z.string().email().max(255).optional(),
   attachments: z.array(z.object({
     filename: z.string(),
     url: z.string().url(),
@@ -56,6 +57,7 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
+  leadGrade: z.enum(["A", "B", "C", "D"]).optional(),
 });
 
 export type CreateProspectInput = z.infer<typeof createProspectSchema>;

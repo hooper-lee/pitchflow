@@ -9,14 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 
-const DETECTOR_CONFIG_KEYS = [
-  "DETECTOR_BLOCKED_DOMAINS",
-  "DETECTOR_BLOCKED_TLDS",
-  "DETECTOR_SCORE_WEIGHTS",
-  "DETECTOR_NAV_KEYWORDS",
-  "DETECTOR_ENABLE_PLAYWRIGHT",
-];
-
 const DEFAULT_WEIGHTS = {
   domainQuality: 30,
   contentSignals: 25,

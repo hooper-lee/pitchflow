@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { emails, campaigns, tenants } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { emails, campaigns, prospects, tenants } from "@/lib/db/schema";
+import { eq, sql, and, inArray } from "drizzle-orm";
 import { processAlert } from "@/lib/services/alert.service";
 
 // Resend webhook events
@@ -189,12 +189,32 @@ async function handleEmailReply(resendId: string) {
 
     // Trigger reply alert (once per email)
     const [email] = await db
-      .select({ id: emails.id, replyAlertedAt: emails.replyAlertedAt })
+      .select({
+        id: emails.id,
+        prospectId: emails.prospectId,
+        campaignId: emails.campaignId,
+        replyAlertedAt: emails.replyAlertedAt,
+      })
       .from(emails)
       .where(eq(emails.resendId, resendId))
       .limit(1);
 
     if (!email || email.replyAlertedAt) return;
+
+    await db
+      .update(prospects)
+      .set({ status: "replied", updatedAt: new Date() })
+      .where(
+        and(
+          eq(prospects.id, email.prospectId),
+          inArray(prospects.status, ["new", "contacted"])
+        )
+      );
+
+    await db
+      .update(campaigns)
+      .set({ repliedCount: sql`${campaigns.repliedCount} + 1` })
+      .where(eq(campaigns.id, email.campaignId));
 
     await db
       .update(emails)

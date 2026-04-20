@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const result = await researchProspect(
       prospectId,
       tenantId,
-      aiProvider || "claude"
+      aiProvider
     );
 
     return apiResponse({

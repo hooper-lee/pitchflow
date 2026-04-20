@@ -31,7 +31,8 @@ export async function createTemplate(
     angle?: string;
     productName?: string;
     senderName?: string;
-    attachments?: any;
+    senderEmail?: string;
+    attachments?: { filename: string; url: string; size?: number }[];
     isDefault?: boolean;
   }
 ) {

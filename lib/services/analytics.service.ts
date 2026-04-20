@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { prospects, emails, campaigns } from "@/lib/db/schema";
-import { eq, count, and, gte, sql, desc, isNotNull } from "drizzle-orm";
+import { eq, count, and, gte, sql, desc } from "drizzle-orm";
 
 export async function getDashboardStats(tenantId: string) {
   const [totalProspects] = await db

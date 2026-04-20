@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Paperclip, X, HelpCircle } from "lucide-react";
+import { Loader2, Sparkles, Paperclip, X } from "lucide-react";
 
 const TEMPLATE_VARIABLES = [
   { name: "{{contactName}}", desc: "联系人姓名（从挖掘数据获取）" },
@@ -47,6 +47,7 @@ interface TemplateEditorProps {
     angle: string | null;
     productName: string | null;
     senderName: string | null;
+    senderEmail: string | null;
     attachments: Attachment[] | null;
     isDefault: boolean | null;
   };
@@ -73,6 +74,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
   const [angle, setAngle] = useState(template?.angle || "");
   const [productName, setProductName] = useState(template?.productName || "");
   const [senderName, setSenderName] = useState(template?.senderName || "");
+  const [senderEmail, setSenderEmail] = useState(template?.senderEmail || "");
   const [attachments, setAttachments] = useState<Attachment[]>(
     template?.attachments || []
   );
@@ -192,6 +194,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
           angle: angle || undefined,
           productName: productName || undefined,
           senderName: senderName || undefined,
+          senderEmail: senderEmail || undefined,
           attachments: attachments.length > 0 ? attachments : undefined,
         }),
       });
@@ -272,6 +275,19 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
                 placeholder="如：张三（默认: Our Team）"
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="senderEmail">发件邮箱</Label>
+            <Input
+              id="senderEmail"
+              type="email"
+              value={senderEmail}
+              onChange={(e) => setSenderEmail(e.target.value)}
+              placeholder="如：sales@yourdomain.com（留空则活动发送时取当前账号邮箱）"
+            />
+            <p className="text-xs text-muted-foreground">
+              选择该模板时，活动会优先使用这里配置的发件邮箱。
+            </p>
           </div>
         </CardContent>
       </Card>

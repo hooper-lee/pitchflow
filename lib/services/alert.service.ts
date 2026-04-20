@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { tenants, emails, prospects, campaigns } from "@/lib/db/schema";
+import { tenants, emails, prospects, campaigns, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/integrations/resend";
 import { sendFeishuAlert } from "@/lib/integrations/feishu";
@@ -48,20 +48,18 @@ export async function processAlert(emailId: string, trigger: AlertTrigger) {
   const alerts = (settings.alerts as Record<string, { enabled?: boolean; url?: string }>) || {};
 
   const message = buildAlertMessage(trigger, prospect, campaign.name);
+  const recipientEmail = await getAlertRecipientEmail(campaign.tenantId, settings);
 
   // Email alert
-  if (alerts.email?.enabled !== false) {
+  if (alerts.email?.enabled !== false && recipientEmail) {
     try {
-      const adminEmail = (settings.adminEmail as string) || undefined;
-      if (adminEmail) {
-        const fromAddress = await getFromAddress();
-        await sendEmail({
-          from: fromAddress,
-          to: adminEmail,
-          subject: `[PitchFlow] ${message.title}`,
-          html: message.html,
-        });
-      }
+      const fromAddress = await getFromAddress();
+      await sendEmail({
+        from: fromAddress,
+        to: recipientEmail,
+        subject: `[PitchFlow] ${message.title}`,
+        html: message.html,
+      });
     } catch (err) {
       console.error("Email alert failed:", err);
     }
@@ -84,6 +82,24 @@ export async function processAlert(emailId: string, trigger: AlertTrigger) {
       console.error("WeCom alert failed:", err);
     }
   }
+}
+
+async function getAlertRecipientEmail(
+  tenantId: string,
+  settings: Record<string, unknown>
+): Promise<string | undefined> {
+  const configuredRecipient = ((settings.alerts as Record<string, unknown>)?.recipientEmail as string) || "";
+  if (configuredRecipient) {
+    return configuredRecipient;
+  }
+
+  const [teamAdmin] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.tenantId, tenantId))
+    .limit(1);
+
+  return teamAdmin?.email || undefined;
 }
 
 function buildAlertMessage(

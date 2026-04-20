@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { tenants, prospects, emails, campaigns, emailTemplates } from "@/lib/db/schema";
-import { eq, and, gte, count, sql } from "drizzle-orm";
+import { eq, and, gte, count } from "drizzle-orm";
 import { PLAN_LIMITS, type Plan } from "@/lib/constants/plans";
 
 export async function getTenantPlan(tenantId: string): Promise<Plan> {

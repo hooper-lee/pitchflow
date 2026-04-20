@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { campaigns, emails, prospects, emailTemplates, followupSequences, campaignProspects } from "@/lib/db/schema";
 import { eq, and, desc, count } from "drizzle-orm";
 import { getAIProviderWithConfig, buildOutreachPrompt } from "@/lib/ai";
+import { getFromAddress } from "@/lib/integrations/resend";
 
 interface CreateCampaignParams {
   name: string;
@@ -98,7 +99,11 @@ export async function createCampaign(
   return campaign;
 }
 
-export async function startCampaign(id: string, tenantId: string) {
+export async function startCampaign(
+  id: string,
+  tenantId: string,
+  defaultFromEmail?: string
+) {
   const campaign = await getCampaign(id, tenantId);
   if (!campaign) throw new Error("Campaign not found");
   if (campaign.status !== "draft") throw new Error("Campaign is not in draft status");
@@ -127,6 +132,11 @@ export async function startCampaign(id: string, tenantId: string) {
       .where(eq(emailTemplates.id, campaign.templateId))
       .limit(1);
   }
+
+  const resolvedFromEmail = await resolveCampaignFromEmail(
+    template?.senderEmail || null,
+    defaultFromEmail
+  );
 
   // Create email records for each prospect with AI-generated content
   const ai = getAIProviderWithConfig(
@@ -166,7 +176,7 @@ export async function startCampaign(id: string, tenantId: string) {
 
       emailRecords.push(emailRecord);
 
-      // Update prospect status
+      // Move to contacted as soon as outreach is queued for this prospect.
       await db
         .update(prospects)
         .set({ status: "contacted", updatedAt: new Date() })
@@ -189,8 +199,14 @@ export async function startCampaign(id: string, tenantId: string) {
   }
 
   // Queue email sends (inline for simplicity, in production use BullMQ)
-  const { getFromAddress } = await import("@/lib/integrations/resend");
-  const fromAddress = await getFromAddress();
+  await db
+    .update(campaigns)
+    .set({
+      fromEmail: resolvedFromEmail,
+      updatedAt: new Date(),
+    })
+    .where(eq(campaigns.id, campaign.id));
+
   for (const emailRecord of emailRecords) {
     try {
       const prospect = prospectsWithEmail.find(
@@ -207,7 +223,7 @@ export async function startCampaign(id: string, tenantId: string) {
         .replace(/$/, "</p>");
 
       const result = await sendEmail({
-        from: fromAddress,
+        from: resolvedFromEmail,
         to: prospect.email,
         subject: emailRecord.subject || "",
         html,
@@ -224,7 +240,7 @@ export async function startCampaign(id: string, tenantId: string) {
 
       await db
         .update(campaigns)
-        .set({ sentCount: db.$count ? undefined : emailRecords.length })
+        .set({ sentCount: emailRecords.length })
         .where(eq(campaigns.id, campaign.id));
     } catch (err) {
       console.error(`Failed to send email ${emailRecord.id}:`, err);
@@ -236,6 +252,21 @@ export async function startCampaign(id: string, tenantId: string) {
   }
 
   return { campaign, emailCount: emailRecords.length };
+}
+
+async function resolveCampaignFromEmail(
+  templateSenderEmail: string | null,
+  defaultFromEmail?: string
+) {
+  if (templateSenderEmail) {
+    return templateSenderEmail;
+  }
+
+  if (defaultFromEmail) {
+    return defaultFromEmail;
+  }
+
+  return getFromAddress();
 }
 
 export async function pauseCampaign(id: string, tenantId: string) {

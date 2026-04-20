@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { eq, desc, ilike, count } from "drizzle-orm";
-import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
+import { desc, ilike, count } from "drizzle-orm";
+import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
 
 export async function GET(request: NextRequest) {
   try {

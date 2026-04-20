@@ -5,6 +5,7 @@ import {
   updateTemplate,
   deleteTemplate,
 } from "@/lib/services/template.service";
+import { createTemplateSchema } from "@/lib/utils/validators";
 import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
 
 export async function GET(
@@ -28,7 +29,8 @@ export async function PUT(
   try {
     const { tenantId } = await requireTenant();
     const body = await request.json();
-    const template = await updateTemplate(params.id, tenantId, body);
+    const input = createTemplateSchema.parse(body);
+    const template = await updateTemplate(params.id, tenantId, input);
     if (!template) return apiError("Template not found", 404);
     return apiResponse(template);
   } catch (error) {

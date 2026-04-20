@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function GeneralSettingsPage() {
   const { data: session, update } = useSession();
-  const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState(session?.user?.name || "");

@@ -24,6 +24,16 @@ export interface SearchResult {
   snippet: string;
 }
 
+interface SearxngResultItem {
+  title?: string;
+  url?: string;
+  content?: string;
+}
+
+interface SearxngResponse {
+  results?: SearxngResultItem[];
+}
+
 // -site: 排除列表（SearXNG 不支持太长的 -site: 列表，改为代码层过滤）
 const EXCLUDE_DOMAINS = new Set([
   "facebook.com", "linkedin.com", "twitter.com", "x.com",
@@ -90,16 +100,16 @@ export async function searchCompany(
         break;
       }
 
-      const data = await res.json();
+      const data: SearxngResponse = await res.json();
       const pageCount = (data.results || []).length;
       console.log(`[SearXNG] page ${pageno}: ${pageCount} results`);
       const results = (data.results || [])
-        .filter((r: any) => !isExcludedDomain(r.url || ""))
-        .map((r: any) => ({
-        title: r.title || "",
-        link: r.url || "",
-        snippet: r.content || "",
-      }));
+        .filter((r) => !isExcludedDomain(r.url || ""))
+        .map((r) => ({
+          title: r.title || "",
+          link: r.url || "",
+          snippet: r.content || "",
+        }));
 
       allResults.push(...results);
 
@@ -134,8 +144,8 @@ export async function searchNews(companyName: string): Promise<SearchResult[]> {
     const res = await fetch(`${baseUrl}/search?${params}`);
     if (!res.ok) return [];
 
-    const data = await res.json();
-    return (data.results || []).slice(0, 5).map((r: any) => ({
+    const data: SearxngResponse = await res.json();
+    return (data.results || []).slice(0, 5).map((r) => ({
       title: r.title || "",
       link: r.url || "",
       snippet: r.content || "",

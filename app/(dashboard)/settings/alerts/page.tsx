@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,7 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AlertsPage() {
+  const { data: session } = useSession();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [feishuUrl, setFeishuUrl] = useState("");
@@ -37,7 +39,7 @@ export default function AlertsPage() {
         if (a.openThreshold) setOpenThreshold(a.openThreshold);
       })
       .catch(() => {});
-  });
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -106,6 +108,10 @@ export default function AlertsPage() {
             />
             <span className="text-sm text-muted-foreground">次时触发高意向告警</span>
           </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            告警邮件默认发送到当前账号邮箱
+            {session?.user?.email ? `（${session.user.email}）` : ""}，请确保注册邮箱真实可用，否则会影响告警送达。
+          </p>
         </CardContent>
       </Card>
 

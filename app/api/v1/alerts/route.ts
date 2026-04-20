@@ -15,10 +15,22 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { tenantId } = await requireTenant();
+    const { tenantId, user } = await requireTenant();
     const body = await request.json();
-    const tenant = await updateTenantSettings(tenantId, body);
-    return apiResponse(tenant?.settings);
+    const tenant = await getTenant(tenantId);
+    const currentSettings = (tenant?.settings as Record<string, unknown>) || {};
+    const nextAlerts = {
+      ...((currentSettings.alerts as Record<string, unknown>) || {}),
+      ...((body.alerts as Record<string, unknown>) || {}),
+      recipientEmail: user.email,
+    };
+    const nextSettings = {
+      ...currentSettings,
+      ...body,
+      alerts: nextAlerts,
+    };
+    const updatedTenant = await updateTenantSettings(tenantId, nextSettings);
+    return apiResponse(updatedTenant?.settings);
   } catch (error) {
     return handleApiError(error);
   }
