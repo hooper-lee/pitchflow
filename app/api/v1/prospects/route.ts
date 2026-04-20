@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       ...params,
     });
 
-    return apiResponse(result.items, 200);
+    return apiResponse({ items: result.items, total: result.total, page: result.page, totalPages: result.totalPages }, 200);
   } catch (error) {
     return handleApiError(error);
   }

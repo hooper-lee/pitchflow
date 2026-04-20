@@ -8,6 +8,7 @@ import {
   Settings,
   ScrollText,
   Timer,
+  Globe,
 } from "lucide-react";
 
 const adminNavItems = [
@@ -17,6 +18,7 @@ const adminNavItems = [
   { href: "/admin/usage", label: "使用量监控", icon: BarChart3 },
   { href: "/admin/tasks", label: "定时任务", icon: Timer },
   { href: "/admin/configs", label: "系统配置", icon: Settings },
+  { href: "/admin/detector", label: "网站检测器", icon: Globe },
   { href: "/admin/audit-logs", label: "审计日志", icon: ScrollText },
 ];
 

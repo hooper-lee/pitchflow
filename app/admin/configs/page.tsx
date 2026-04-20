@@ -36,7 +36,7 @@ const CONFIG_SECTIONS = [
       { key: "HUNTER_IO_API_KEY", label: "Hunter.io API Key", secret: true, placeholder: "..." },
       { key: "SNOV_CLIENT_ID", label: "Snov.io Client ID", secret: false, placeholder: "..." },
       { key: "SNOV_CLIENT_SECRET", label: "Snov.io Client Secret", secret: true, placeholder: "..." },
-      { key: "SERPAPI_KEY", label: "SerpAPI Key", secret: true, placeholder: "..." },
+      { key: "SEARXNG_URL", label: "搜索引擎地址", secret: false, placeholder: "http://localhost:8888" },
     ],
     routing: [
       { key: "DISCOVERY_PROVIDER_HUNTER", label: "Hunter.io", dependsOn: "HUNTER_IO_API_KEY" },

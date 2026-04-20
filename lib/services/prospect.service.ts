@@ -5,26 +5,8 @@ import { discoverEmails as hunterDiscover } from "@/lib/integrations/hunter";
 import { discoverEmails as snovDiscover } from "@/lib/integrations/snovio";
 import { inferEmailPattern } from "@/lib/utils/email-patterns";
 import { searchCompany } from "@/lib/integrations/serpapi";
-
-// Domains to filter out from SerpAPI results
-const BLOCKED_DOMAINS = [
-  "facebook.com", "linkedin.com", "twitter.com", "instagram.com",
-  "youtube.com", "wikipedia.org", "medium.com", "reddit.com",
-  "quora.com", "glassdoor.com", "indeed.com", "crunchbase.com",
-  "bloomberg.com", "amazon.com", "alibaba.com", "globalsources.com",
-  "zhihu.com", "csdn.net", "jianshu.com", "baidu.com",
-  "weibo.com", "douban.com", "tianyancha.com", "qcc.com",
-  "1688.com", "made-in-china.com",
-];
-
-function isBlockedDomain(domain: string): boolean {
-  const lower = domain.toLowerCase();
-  // Block social/news/education/government sites
-  if (BLOCKED_DOMAINS.some((blocked) => lower.includes(blocked))) return true;
-  if (lower.endsWith(".gov") || lower.endsWith(".gov.cn") || lower.endsWith(".edu") || lower.endsWith(".mil")) return true;
-  if (lower.includes(".gov.") || lower.includes(".edu.")) return true;
-  return false;
-}
+import { detectOfficialWebsite, extractContacts } from "@/lib/detector";
+import { MINIMUM_SCORE_THRESHOLD } from "@/lib/detector/constants";
 
 async function getEnabledProviders(): Promise<("hunter" | "snovio")[]> {
   try {
@@ -167,6 +149,33 @@ export async function deleteProspect(id: string, tenantId: string) {
     .where(and(eq(prospects.id, id), eq(prospects.tenantId, tenantId)));
 }
 
+// Map country names to Google gl/hl codes
+const COUNTRY_GL_MAP: Record<string, string> = {
+  "USA": "us", "United States": "us", "美国": "us",
+  "Germany": "de", "德国": "de",
+  "UK": "gb", "United Kingdom": "gb", "英国": "gb",
+  "France": "fr", "法国": "fr",
+  "Japan": "jp", "日本": "jp",
+  "Korea": "kr", "韩国": "kr",
+  "Brazil": "br", "巴西": "br",
+  "India": "in", "印度": "in",
+  "Canada": "ca", "加拿大": "ca",
+  "Australia": "au", "澳大利亚": "au",
+  "Mexico": "mx", "墨西哥": "mx",
+  "Italy": "it", "意大利": "it",
+  "Spain": "es", "西班牙": "es",
+  "Russia": "ru", "俄罗斯": "ru",
+  "Turkey": "tr", "土耳其": "tr",
+  "Thailand": "th", "泰国": "th",
+  "Vietnam": "vn", "越南": "vn",
+  "Indonesia": "id", "印度尼西亚": "id",
+  "Malaysia": "my", "马来西亚": "my",
+  "Philippines": "ph", "菲律宾": "ph",
+  "Singapore": "sg", "新加坡": "sg",
+  "UAE": "ae", "阿联酋": "ae",
+  "Saudi Arabia": "sa", "沙特阿拉伯": "sa",
+};
+
 export async function discoverProspects(
   tenantId: string,
   params: {
@@ -177,9 +186,11 @@ export async function discoverProspects(
     limit?: number;
   }
 ) {
-  const created = [];
+  const created: (typeof prospects.$inferSelect)[] = [];
   const providers = await getEnabledProviders();
   const limit = params.limit || 10;
+  // 放大搜索量，确保过滤后还有足够候选
+  const searchDepth = Math.max(limit * 3, 20);
 
   if (params.domain) {
     // Domain-based discovery — try providers in order
@@ -278,8 +289,7 @@ export async function discoverProspects(
       created.push(prospect);
     }
   } else {
-    // Industry/keyword-based discovery via SerpAPI
-    // Normalize Chinese punctuation to ASCII
+    // Industry/keyword-based discovery via SerpAPI + Detector
     const normalize = (s: string) => s.replace(/，/g, ",").replace(/、/g, " ").replace(/。/g, ".");
     const hasChinese = /[\u4e00-\u9fff]/.test(params.keywords || params.industry || "");
     const searchParts = [
@@ -288,24 +298,29 @@ export async function discoverProspects(
       params.country,
     ].filter(Boolean);
 
-    // Only add "buyer importer" for English queries
     const searchQuery = hasChinese
-      ? searchParts.join(" ")
-      : [...searchParts, "buyer OR importer OR distributor"].join(" ");
+      ? [...searchParts, "厂家 OR 工厂 OR 供应商 OR 官网"].join(" ")
+      : [...searchParts, "manufacturer OR supplier OR official site"].join(" ");
 
-    const searchResults = await searchCompany(searchQuery);
+    // Determine gl/hl for local results
+    const gl = params.country ? COUNTRY_GL_MAP[params.country] : undefined;
+    const hl = hasChinese ? "zh-CN" : "en";
 
-    for (const result of searchResults.slice(0, limit)) {
-      // Extract domain from URL
-      let domain = "";
-      try {
-        domain = new URL(result.link).hostname.replace(/^www\./, "");
-      } catch {
-        continue;
-      }
+    const searchResults = await searchCompany(searchQuery, { num: searchDepth, gl, hl });
+    console.log(`[discover] SerpAPI returned ${searchResults.length} results (requested ${searchDepth}), query: ${searchQuery}`);
 
-      // Filter out non-prospect domains
-      if (isBlockedDomain(domain)) continue;
+    if (searchResults.length === 0) return created;
+
+    // Use detector to find official websites
+    const detectorResult = await detectOfficialWebsite(searchQuery, searchResults, undefined, limit);
+    console.log(`[discover] Detector: passedFilter=${detectorResult.passedFilter}, fetched=${detectorResult.fetchedSuccessfully}, candidates=${detectorResult.allCandidates.length}, winner=${detectorResult.winner ? 'yes' : 'no'}`);
+
+    // Loop over all scored candidates (already sorted by score desc)
+    for (const scored of detectorResult.allCandidates) {
+      if (created.length >= limit) break;
+      if (scored.score < MINIMUM_SCORE_THRESHOLD) break;
+
+      const domain = scored.signals.domain;
 
       // Skip if we already have a prospect from this domain
       const [existing] = await db
@@ -314,7 +329,6 @@ export async function discoverProspects(
         .where(
           and(
             eq(prospects.tenantId, tenantId),
-            // Match by domain: check website URL contains this domain
             or(
               eq(prospects.companyName, domain),
               sql`${prospects.website} LIKE ${`%${domain}%`}`
@@ -325,25 +339,76 @@ export async function discoverProspects(
 
       if (existing) continue;
 
-      // Try to extract a company name from the search result title
-      const companyName = result.title.split(/[-|–—]/)[0].trim() || domain;
-      const inferred = inferEmailPattern("contact", "", domain);
-      const [prospect] = await db
-        .insert(prospects)
-        .values({
-          tenantId,
-          companyName,
-          email: inferred,
-          industry: params.industry,
-          country: params.country,
-          website: result.link,
-          researchSummary: result.snippet,
-          source: "serpapi",
-          status: "new",
-        })
-        .returning();
+      const contacts = extractContacts(scored.signals);
+      const companyName = contacts.companyName || scored.candidate.title.split(/[-|–—]/)[0].trim() || domain;
+      const website = scored.signals.finalUrl || scored.candidate.link;
 
-      created.push(prospect);
+      if (contacts.emails.length > 0) {
+        // Insert with real extracted email (only first email per company)
+        const [prospect] = await db
+          .insert(prospects)
+          .values({
+            tenantId,
+            companyName,
+            email: contacts.emails[0],
+            industry: params.industry,
+            country: params.country,
+            website,
+            researchSummary: scored.candidate.snippet,
+            companyScore: scored.score,
+            source: "detector",
+            status: "new",
+            metadata: {
+              detectorScore: scored.score,
+              detectorDimensions: scored.dimensionScores,
+              phones: contacts.phones,
+              socialLinks: contacts.socialLinks,
+            },
+          })
+          .returning();
+        created.push(prospect);
+      } else {
+        // No email found — try Hunter/Snov fallback, then inferred email
+        let fallbackEmails: string[] = [];
+
+        for (const provider of providers) {
+          if (fallbackEmails.length > 0) break;
+          try {
+            if (provider === "hunter") {
+              const results = await hunterDiscover(domain, { limit: 2 });
+              fallbackEmails = results.map((r: any) => r.value).filter(Boolean);
+            } else if (provider === "snovio") {
+              const results = await snovDiscover(domain, { limit: 2 });
+              fallbackEmails = results.map((r: any) => r.email).filter(Boolean);
+            }
+          } catch {
+            // provider failed, continue
+          }
+        }
+
+        const email = fallbackEmails[0] || inferEmailPattern("contact", "", domain);
+        const [prospect] = await db
+          .insert(prospects)
+          .values({
+            tenantId,
+            companyName,
+            email,
+            industry: params.industry,
+            country: params.country,
+            website,
+            researchSummary: scored.candidate.snippet,
+            companyScore: scored.score,
+            source: fallbackEmails.length > 0 ? "detector+fallback" : "detector+inferred",
+            status: "new",
+            metadata: {
+              detectorScore: scored.score,
+              detectorDimensions: scored.dimensionScores,
+              fallbackUsed: fallbackEmails.length > 0,
+            },
+          })
+          .returning();
+        created.push(prospect);
+      }
     }
   }
 

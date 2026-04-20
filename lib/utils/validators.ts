@@ -17,7 +17,7 @@ export const discoverProspectsSchema = z.object({
   industry: z.string().optional(),
   country: z.string().optional(),
   keywords: z.string().optional(),
-  limit: z.number().int().min(1).max(50).default(10),
+  limit: z.number().int().min(5).max(50).default(10),
 }).refine((data) => data.domain || data.industry || data.keywords, {
   message: "至少输入域名、行业或关键词之一",
 });
@@ -53,7 +53,7 @@ export const createTemplateSchema = z.object({
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
 });
