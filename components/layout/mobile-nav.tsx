@@ -37,8 +37,8 @@ export function MobileNav() {
           <span className="sr-only">Toggle navigation menu</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0">
-        <div className="flex items-center h-16 px-6 border-b">
+      <SheetContent side="left" className="w-64 border-slate-200/80 p-0">
+        <div className="flex items-center h-14 px-5 border-b border-slate-200/80">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">PF</span>
           </div>
@@ -55,10 +55,10 @@ export function MobileNav() {
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                  "flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] transition-colors",
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-slate-100 hover:text-foreground"
                 )}
               >
                 <item.icon className="h-4 w-4" />

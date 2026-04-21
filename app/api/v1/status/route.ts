@@ -31,6 +31,7 @@ export async function GET() {
       aiModel: !!(map["CUSTOM_AI_BASE_URL"] && map["CUSTOM_AI_API_KEY"]),
       hunter: !!map["HUNTER_IO_API_KEY"],
       snovio: !!(map["SNOV_CLIENT_ID"] && map["SNOV_CLIENT_SECRET"]),
+      emailEngine: !!(map["EMAILENGINE_URL"] && map["EMAILENGINE_ACCESS_TOKEN"]),
       fromAddress,
     });
   } catch (error) {

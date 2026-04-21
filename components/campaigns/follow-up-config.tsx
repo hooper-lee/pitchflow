@@ -107,7 +107,7 @@ export function FollowUpConfig({
       <CardHeader>
         <CardTitle>跟进序列</CardTitle>
         <CardDescription>
-          配置第 1、2、3 轮自动跟进，系统会基于上一封已发送邮件继续生成下一轮内容
+          配置自动跟进延迟。系统每 15 分钟扫描一次；达到延迟时间且客户未回复时，会自动发送下一轮邮件。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

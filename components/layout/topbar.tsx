@@ -27,13 +27,13 @@ export function Topbar() {
     : session?.user?.email?.[0]?.toUpperCase() || "U";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-card px-4 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-slate-200/80 bg-white/85 px-3 backdrop-blur lg:px-5">
       <MobileNav />
       <div className="flex-1" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-            <Avatar className="h-9 w-9">
+          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+            <Avatar className="h-8 w-8">
               <AvatarImage src={session?.user?.image || ""} />
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { emails, campaigns, prospects, tenants } from "@/lib/db/schema";
+import { emails, campaigns, prospects } from "@/lib/db/schema";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import { processAlert } from "@/lib/services/alert.service";
 
@@ -56,40 +56,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function getOpenThreshold(emailInternalId: string): Promise<number> {
-  try {
-    const [email] = await db
-      .select({ campaignId: emails.campaignId })
-      .from(emails)
-      .where(eq(emails.id, emailInternalId))
-      .limit(1);
-    if (!email) return 3;
-
-    const [campaign] = await db
-      .select({ tenantId: campaigns.tenantId })
-      .from(campaigns)
-      .where(eq(campaigns.id, email.campaignId))
-      .limit(1);
-    if (!campaign) return 3;
-
-    const [tenant] = await db
-      .select({ settings: tenants.settings })
-      .from(tenants)
-      .where(eq(tenants.id, campaign.tenantId))
-      .limit(1);
-    if (!tenant) return 3;
-
-    const settings = (tenant.settings as Record<string, unknown>) || {};
-    const alerts = (settings.alerts as Record<string, unknown>) || {};
-    return (alerts.openThreshold as number) || 3;
-  } catch {
-    return 3;
-  }
-}
-
 async function handleEmailOpen(resendId: string) {
   try {
-    // Increment open count
     await db
       .update(emails)
       .set({
@@ -98,31 +66,6 @@ async function handleEmailOpen(resendId: string) {
         status: "opened",
       })
       .where(eq(emails.resendId, resendId));
-
-    // Check if should trigger high-intent alert
-    const [email] = await db
-      .select({ id: emails.id, openCount: emails.openCount, highIntentAlertedAt: emails.highIntentAlertedAt })
-      .from(emails)
-      .where(eq(emails.resendId, resendId))
-      .limit(1);
-
-    if (!email || email.highIntentAlertedAt) return;
-
-    const threshold = await getOpenThreshold(email.id);
-    const currentCount = (email.openCount || 0) + 1; // +1 because the update above just happened
-
-    if (currentCount >= threshold) {
-      await db
-        .update(emails)
-        .set({ highIntentAlertedAt: new Date() })
-        .where(eq(emails.id, email.id));
-
-      processAlert(email.id, {
-        type: "high_intent",
-        emailId: email.id,
-        openCount: currentCount,
-      }).catch((err) => console.error("Alert dispatch failed:", err));
-    }
   } catch (err) {
     console.error("Failed to handle email open:", err);
   }
@@ -139,25 +82,6 @@ async function handleEmailClick(resendId: string) {
       })
       .where(eq(emails.resendId, resendId));
 
-    // Trigger click alert (once per email)
-    const [email] = await db
-      .select({ id: emails.id, clickCount: emails.clickCount, clickAlertedAt: emails.clickAlertedAt })
-      .from(emails)
-      .where(eq(emails.resendId, resendId))
-      .limit(1);
-
-    if (!email || email.clickAlertedAt) return;
-
-    await db
-      .update(emails)
-      .set({ clickAlertedAt: new Date() })
-      .where(eq(emails.id, email.id));
-
-    processAlert(email.id, {
-      type: "clicked",
-      emailId: email.id,
-      clickCount: (email.clickCount || 0) + 1,
-    }).catch((err) => console.error("Alert dispatch failed:", err));
   } catch (err) {
     console.error("Failed to handle email click:", err);
   }

@@ -26,7 +26,11 @@ import { Loader2, Check } from "lucide-react";
 interface Template {
   id: string;
   name: string;
-  senderEmail?: string | null;
+}
+
+interface MailAccount {
+  id: string;
+  email: string;
 }
 
 interface Prospect {
@@ -62,12 +66,17 @@ export function CampaignForm() {
   const [customBaseURL, setCustomBaseURL] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
   const [customModel, setCustomModel] = useState("");
-  const [fromAddress, setFromAddress] = useState("");
+  const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([]);
 
   useEffect(() => {
     fetch("/api/v1/templates")
       .then((res) => res.json())
-      .then((data) => setTemplates(data.data || []))
+      .then((data) => setTemplates(data.data?.items || data.data || []))
+      .catch(() => {});
+
+    fetch("/api/v1/mail-accounts")
+      .then((res) => res.json())
+      .then((data) => setMailAccounts(data.data || []))
       .catch(() => {});
 
     fetch("/api/v1/prospects?limit=100")
@@ -84,7 +93,6 @@ export function CampaignForm() {
         const configured = data.data?.aiModel || false;
         setAdminModelConfigured(configured);
         if (configured) setAiProvider("custom");
-        setFromAddress(data.data?.fromAddress || "");
       })
       .catch(() => {});
 
@@ -95,12 +103,8 @@ export function CampaignForm() {
   }, []);
 
   const isUserCustom = aiProvider === "_user_custom";
-  const selectedTemplate = templates.find((template) => template.id === templateId);
-  const displayedFromAddress =
-    selectedTemplate?.senderEmail ||
-    session?.user?.email ||
-    fromAddress ||
-    "未配置";
+  const mailboxReady = mailAccounts.some((account) => account.email === session?.user?.email);
+  const displayedFromAddress = session?.user?.email || "未配置";
 
   const filteredProspects = prospects.filter((p) => {
     if (leadGradeFilter !== "all" && p.leadGrade !== leadGradeFilter) {
@@ -184,15 +188,15 @@ export function CampaignForm() {
   };
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
-        <CardTitle>创建营销活动</CardTitle>
+        <CardTitle className="text-xl">创建营销活动</CardTitle>
         <CardDescription>
-          未选择模板时默认使用当前账号邮箱；选择模板后优先使用模板内配置的发件邮箱
+          活动发送统一使用当前登录账号注册邮箱对应的已连接邮箱账号，请先在“设置 &gt; 邮箱账号”完成连接
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="name">活动名称 *</Label>
             <Input
@@ -234,7 +238,7 @@ export function CampaignForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="persona">目标联系人角色</Label>
               <Input
@@ -246,7 +250,7 @@ export function CampaignForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="template">邮件模板</Label>
               <Select value={templateId} onValueChange={setTemplateId}>
@@ -285,20 +289,23 @@ export function CampaignForm() {
             </div>
           </div>
 
-          <div className="space-y-2 rounded-lg border bg-muted/30 px-4 py-3">
+          <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
             <Label className="text-sm">当前发件邮箱</Label>
             <p className="text-sm font-medium text-foreground">
               {displayedFromAddress}
             </p>
             <p className="text-xs text-muted-foreground">
-              {selectedTemplate?.senderEmail
-                ? "当前已选择模板，活动会优先使用模板里配置的发件邮箱。"
-                : "当前未选择模板，活动发送默认使用你的账号邮箱。"}
+              当前活动发送将直接使用当前登录账号注册邮箱对应的已连接邮箱账号。
             </p>
+            {!mailboxReady && (
+              <p className="text-xs text-destructive">
+                当前登录账号注册邮箱对应的已连接邮箱账号不存在，请先到设置里的“邮箱账号”完成连接。
+              </p>
+            )}
           </div>
 
           {isUserCustom && (
-            <Card className="border-dashed">
+            <Card className="border-dashed border-slate-200/80 bg-slate-50/40">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">自定义模型配置</CardTitle>
                 <CardDescription className="text-xs">

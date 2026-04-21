@@ -1,8 +1,20 @@
 import { db } from "@/lib/db";
-import { campaigns, emails, prospects, emailTemplates, followupSequences, campaignProspects } from "@/lib/db/schema";
-import { eq, and, desc, count } from "drizzle-orm";
+import {
+  campaigns,
+  emails,
+  prospects,
+  emailReplies,
+  emailTemplates,
+  followupSequences,
+  campaignProspects,
+} from "@/lib/db/schema";
+import { eq, and, desc, count, inArray } from "drizzle-orm";
 import { getAIProviderWithConfig, buildOutreachPrompt } from "@/lib/ai";
-import { getFromAddress } from "@/lib/integrations/resend";
+import { submitEmailEngineMessage } from "@/lib/integrations/emailengine";
+import {
+  getMailAccountById,
+  getUserMailAccountByRegisteredEmail,
+} from "@/lib/services/mail-account.service";
 
 interface CreateCampaignParams {
   name: string;
@@ -18,13 +30,51 @@ interface CreateCampaignParams {
   };
 }
 
-export async function listCampaigns(tenantId: string, limit = 20) {
-  return db
+interface ResolvedSender {
+  fromEmail: string;
+  mailAccount: {
+    id: string;
+    accountKey: string;
+    email: string;
+  };
+}
+
+export interface StartCampaignProgress {
+  type: "status" | "progress";
+  message: string;
+  processed: number;
+  total: number;
+  successCount: number;
+  failedCount: number;
+  companyName?: string;
+}
+
+export interface RetryEmailProgress {
+  type: "status";
+  message: string;
+}
+
+export async function listCampaigns(tenantId: string, page = 1, limit = 20) {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(campaigns)
+    .where(eq(campaigns.tenantId, tenantId));
+
+  const items = await db
     .select()
     .from(campaigns)
     .where(eq(campaigns.tenantId, tenantId))
     .orderBy(desc(campaigns.createdAt))
-    .limit(limit);
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  return {
+    items,
+    total: Number(total),
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(Number(total) / limit)),
+  };
 }
 
 export async function getCampaign(id: string, tenantId: string) {
@@ -45,11 +95,9 @@ export async function getCampaignProspectCount(campaignId: string): Promise<numb
   return Number(total);
 }
 
-export async function createCampaign(
-  tenantId: string,
-  data: CreateCampaignParams
-) {
+export async function createCampaign(tenantId: string, data: CreateCampaignParams) {
   const { prospectIds, ...campaignData } = data;
+  const totalProspects = prospectIds?.length || 0;
 
   const [campaign] = await db
     .insert(campaigns)
@@ -58,42 +106,23 @@ export async function createCampaign(
       aiConfig: campaignData.aiConfig || null,
       tenantId,
       status: "draft",
+      totalProspects,
     })
     .returning();
 
-  // Bind prospects to campaign
   if (prospectIds && prospectIds.length > 0) {
     await db.insert(campaignProspects).values(
-      prospectIds.map((pid) => ({
+      prospectIds.map((prospectId) => ({
         campaignId: campaign.id,
-        prospectId: pid,
+        prospectId,
       }))
     );
   }
 
-  // Create default 3-step follow-up sequence
   await db.insert(followupSequences).values([
-    {
-      campaignId: campaign.id,
-      stepNumber: 1,
-      delayDays: 3,
-      angle: "value_prop",
-      enabled: true,
-    },
-    {
-      campaignId: campaign.id,
-      stepNumber: 2,
-      delayDays: 7,
-      angle: "social_proof",
-      enabled: true,
-    },
-    {
-      campaignId: campaign.id,
-      stepNumber: 3,
-      delayDays: 14,
-      angle: "urgency",
-      enabled: true,
-    },
+    { campaignId: campaign.id, stepNumber: 1, delayDays: 3, angle: "value_prop", enabled: true },
+    { campaignId: campaign.id, stepNumber: 2, delayDays: 7, angle: "social_proof", enabled: true },
+    { campaignId: campaign.id, stepNumber: 3, delayDays: 14, angle: "urgency", enabled: true },
   ]);
 
   return campaign;
@@ -102,64 +131,76 @@ export async function createCampaign(
 export async function startCampaign(
   id: string,
   tenantId: string,
-  defaultFromEmail?: string
+  userId: string,
+  userEmail?: string,
+  onProgress?: (event: StartCampaignProgress) => void | Promise<void>
 ) {
   const campaign = await getCampaign(id, tenantId);
   if (!campaign) throw new Error("Campaign not found");
   if (campaign.status !== "draft") throw new Error("Campaign is not in draft status");
 
-  // Get prospects bound to this campaign
-  const boundProspects = await db
-    .select({ prospect: prospects })
-    .from(campaignProspects)
-    .innerJoin(prospects, eq(campaignProspects.prospectId, prospects.id))
-    .where(eq(campaignProspects.campaignId, campaign.id));
-
-  const prospectsWithEmail = boundProspects
-    .map((r) => r.prospect)
-    .filter((p) => p.email);
+  const template = await getCampaignTemplate(campaign.templateId);
+  const sender = await resolveSender(tenantId, userId, userEmail);
+  const prospectsWithEmail = await getBoundProspectsWithEmail(campaign.id);
 
   if (prospectsWithEmail.length === 0) {
     throw new Error("该活动未绑定客户或客户没有邮箱，请先在活动配置中选择客户");
   }
 
-  // Get template if specified
-  let template = null;
-  if (campaign.templateId) {
-    [template] = await db
-      .select()
-      .from(emailTemplates)
-      .where(eq(emailTemplates.id, campaign.templateId))
-      .limit(1);
-  }
-
-  const resolvedFromEmail = await resolveCampaignFromEmail(
-    template?.senderEmail || null,
-    defaultFromEmail
-  );
-
-  // Create email records for each prospect with AI-generated content
   const ai = getAIProviderWithConfig(
     campaign.aiProvider || "custom",
     campaign.aiConfig as { baseURL?: string; apiKey?: string; model?: string } | undefined
   );
-  const emailRecords = [];
+
+  const queuedEmailIds: string[] = [];
+  let processedCount = 0;
+  let failedCount = 0;
+
+  await db
+    .update(campaigns)
+    .set({
+      status: "active",
+      totalProspects: prospectsWithEmail.length,
+      mailAccountId: sender.mailAccount.id,
+      fromEmail: sender.fromEmail,
+      updatedAt: new Date(),
+    })
+    .where(eq(campaigns.id, campaign.id));
+
+  await onProgress?.({
+    type: "status",
+    message: "已启动活动，正在生成首批邮件",
+    processed: processedCount,
+    total: prospectsWithEmail.length,
+    successCount: queuedEmailIds.length,
+    failedCount,
+  });
 
   for (const prospect of prospectsWithEmail) {
     try {
-      const prompt = buildOutreachPrompt({
-        prospectName: prospect.contactName || "there",
-        companyName: prospect.companyName || "your company",
-        industry: prospect.industry || "",
-        country: prospect.country || "",
-        researchSummary: prospect.researchSummary || undefined,
-        productName: template?.productName || "our products and services",
-        senderName: template?.senderName || "Our Team",
-        angle: template?.angle || undefined,
-        templateBody: template?.body || undefined,
+      await onProgress?.({
+        type: "progress",
+        message: `正在为 ${prospect.companyName || prospect.email || "当前客户"} 生成邮件`,
+        processed: processedCount,
+        total: prospectsWithEmail.length,
+        successCount: queuedEmailIds.length,
+        failedCount,
+        companyName: prospect.companyName || undefined,
       });
 
-      const result = await ai.generateEmail({ prompt });
+      const generatedEmail = await ai.generateEmail({
+        prompt: buildOutreachPrompt({
+          prospectName: prospect.contactName || "there",
+          companyName: prospect.companyName || "your company",
+          industry: prospect.industry || "",
+          country: prospect.country || "",
+          researchSummary: prospect.researchSummary || undefined,
+          productName: template?.productName || "our products and services",
+          senderName: template?.senderName || "Our Team",
+          angle: template?.angle || undefined,
+          templateBody: template?.body || undefined,
+        }),
+      });
 
       const [emailRecord] = await db
         .insert(emails)
@@ -167,106 +208,96 @@ export async function startCampaign(
           campaignId: campaign.id,
           prospectId: prospect.id,
           templateId: campaign.templateId,
+          mailAccountId: sender.mailAccount.id,
           stepNumber: 1,
-          subject: result.subject,
-          body: result.body,
+          subject: generatedEmail.subject,
+          body: generatedEmail.body,
+          provider: "emailengine",
           status: "queued",
         })
         .returning();
 
-      emailRecords.push(emailRecord);
-
-      // Move to contacted as soon as outreach is queued for this prospect.
-      await db
-        .update(prospects)
-        .set({ status: "contacted", updatedAt: new Date() })
-        .where(eq(prospects.id, prospect.id));
-    } catch (err) {
-      console.error(`Failed to generate email for prospect ${prospect.id}:`, err);
-    }
-  }
-
-  // Update campaign status
-  if (emailRecords.length > 0) {
-    await db
-      .update(campaigns)
-      .set({
-        status: "active",
-        totalProspects: emailRecords.length,
-        updatedAt: new Date(),
-      })
-      .where(eq(campaigns.id, campaign.id));
-  }
-
-  // Queue email sends (inline for simplicity, in production use BullMQ)
-  await db
-    .update(campaigns)
-    .set({
-      fromEmail: resolvedFromEmail,
-      updatedAt: new Date(),
-    })
-    .where(eq(campaigns.id, campaign.id));
-
-  for (const emailRecord of emailRecords) {
-    try {
-      const prospect = prospectsWithEmail.find(
-        (p) => p.id === emailRecord.prospectId
-      );
-      if (!prospect?.email) continue;
-
-      // Import sendEmail directly since we're in the same process
-      const { sendEmail } = await import("@/lib/integrations/resend");
-      const html = (emailRecord.body || "")
-        .replace(/\n\n/g, "</p><p>")
-        .replace(/\n/g, "<br/>")
-        .replace(/^/, "<p>")
-        .replace(/$/, "</p>");
-
-      const result = await sendEmail({
-        from: resolvedFromEmail,
-        to: prospect.email,
+      const messageHeaderId = buildTrackedMessageId(emailRecord.id, sender.fromEmail);
+      const html = formatEmailHtml(emailRecord.body || "");
+      const submitResult = await submitEmailEngineMessage(sender.mailAccount.accountKey, {
+        from: { address: sender.fromEmail, name: template?.senderName || null },
+        to: [buildRecipient(prospect.email!, prospect.contactName)],
         subject: emailRecord.subject || "",
+        text: emailRecord.body || "",
         html,
+        messageId: messageHeaderId,
+        headers: buildBaseHeaders(emailRecord.id, campaign.id),
+        trackOpens: true,
+        trackClicks: true,
       });
 
       await db
         .update(emails)
         .set({
-          status: "sent",
-          resendId: result.id,
-          sentAt: new Date(),
+          providerQueueId: submitResult?.queueId || null,
+          providerMessageId: submitResult?.messageId || messageHeaderId,
+          messageHeaderId,
+          threadId: submitResult?.messageId || messageHeaderId,
         })
         .where(eq(emails.id, emailRecord.id));
 
       await db
-        .update(campaigns)
-        .set({ sentCount: emailRecords.length })
-        .where(eq(campaigns.id, campaign.id));
-    } catch (err) {
-      console.error(`Failed to send email ${emailRecord.id}:`, err);
+        .update(prospects)
+        .set({ status: "contacted", updatedAt: new Date() })
+        .where(eq(prospects.id, prospect.id));
+
+      queuedEmailIds.push(emailRecord.id);
+      processedCount += 1;
+      await onProgress?.({
+        type: "progress",
+        message: `${prospect.companyName || prospect.email || "当前客户"} 已加入发送队列`,
+        processed: processedCount,
+        total: prospectsWithEmail.length,
+        successCount: queuedEmailIds.length,
+        failedCount,
+        companyName: prospect.companyName || undefined,
+      });
+    } catch (error) {
+      console.error(`Failed to queue campaign email for prospect ${prospect.id}:`, error);
       await db
         .update(emails)
         .set({ status: "failed" })
-        .where(eq(emails.id, emailRecord.id));
+        .where(
+          and(
+            eq(emails.campaignId, campaign.id),
+            eq(emails.prospectId, prospect.id),
+            eq(emails.status, "queued")
+          )
+        );
+      processedCount += 1;
+      failedCount += 1;
+      await onProgress?.({
+        type: "progress",
+        message: `${prospect.companyName || prospect.email || "当前客户"} 生成失败`,
+        processed: processedCount,
+        total: prospectsWithEmail.length,
+        successCount: queuedEmailIds.length,
+        failedCount,
+        companyName: prospect.companyName || undefined,
+      });
     }
   }
 
-  return { campaign, emailCount: emailRecords.length };
-}
+  await db
+    .update(campaigns)
+    .set({ sentCount: queuedEmailIds.length, updatedAt: new Date() })
+    .where(eq(campaigns.id, campaign.id));
 
-async function resolveCampaignFromEmail(
-  templateSenderEmail: string | null,
-  defaultFromEmail?: string
-) {
-  if (templateSenderEmail) {
-    return templateSenderEmail;
-  }
+  await onProgress?.({
+    type: "status",
+    message: "活动启动完成",
+    processed: processedCount,
+    total: prospectsWithEmail.length,
+    successCount: queuedEmailIds.length,
+    failedCount,
+  });
 
-  if (defaultFromEmail) {
-    return defaultFromEmail;
-  }
-
-  return getFromAddress();
+  return { campaign, emailCount: queuedEmailIds.length };
 }
 
 export async function pauseCampaign(id: string, tenantId: string) {
@@ -279,6 +310,99 @@ export async function pauseCampaign(id: string, tenantId: string) {
   return campaign;
 }
 
+export async function retryCampaignEmail(campaignId: string, emailId: string, tenantId: string) {
+  const campaign = await getCampaign(campaignId, tenantId);
+  if (!campaign) throw new Error("Campaign not found");
+
+  const [emailRecord] = await db
+    .select()
+    .from(emails)
+    .where(and(eq(emails.id, emailId), eq(emails.campaignId, campaignId)))
+    .limit(1);
+
+  if (!emailRecord) throw new Error("Email not found");
+  if (!["failed", "bounced"].includes(emailRecord.status)) {
+    throw new Error("Email status does not support retry");
+  }
+
+  const [prospect] = await db
+    .select()
+    .from(prospects)
+    .where(eq(prospects.id, emailRecord.prospectId))
+    .limit(1);
+
+  if (!prospect?.email) {
+    throw new Error("Prospect email not found");
+  }
+
+  const template = await getCampaignTemplate(campaign.templateId);
+  const mailAccount = campaign.mailAccountId
+    ? await getMailAccountById(campaign.mailAccountId)
+    : null;
+
+  if (!mailAccount || !campaign.fromEmail) {
+    throw new Error("Campaign sender not configured");
+  }
+
+  const messageHeaderId = buildTrackedMessageId(emailRecord.id, campaign.fromEmail);
+  const html = formatEmailHtml(emailRecord.body || "");
+  const submitResult = await submitEmailEngineMessage(mailAccount.accountKey, {
+    from: { address: campaign.fromEmail, name: template?.senderName || null },
+    to: [buildRecipient(prospect.email, prospect.contactName)],
+    subject: emailRecord.subject || "",
+    text: emailRecord.body || "",
+    html,
+    messageId: messageHeaderId,
+    headers: buildBaseHeaders(emailRecord.id, campaign.id),
+    trackOpens: true,
+    trackClicks: true,
+  });
+
+  const [updatedEmail] = await db
+    .update(emails)
+    .set({
+      status: "queued",
+      bouncedAt: null,
+      sentAt: null,
+      providerQueueId: submitResult?.queueId || null,
+      providerMessageId: submitResult?.messageId || messageHeaderId,
+      messageHeaderId,
+      threadId: submitResult?.messageId || messageHeaderId,
+    })
+    .where(eq(emails.id, emailRecord.id))
+    .returning();
+
+  return updatedEmail;
+}
+
+export async function retryCampaignEmailWithProgress(
+  campaignId: string,
+  emailId: string,
+  tenantId: string,
+  onProgress?: (event: RetryEmailProgress) => void | Promise<void>
+) {
+  await onProgress?.({ type: "status", message: "正在校验邮件状态" });
+
+  const campaign = await getCampaign(campaignId, tenantId);
+  if (!campaign) throw new Error("Campaign not found");
+
+  const [emailRecord] = await db
+    .select()
+    .from(emails)
+    .where(and(eq(emails.id, emailId), eq(emails.campaignId, campaignId)))
+    .limit(1);
+
+  if (!emailRecord) throw new Error("Email not found");
+  if (!["failed", "bounced"].includes(emailRecord.status)) {
+    throw new Error("Email status does not support retry");
+  }
+
+  await onProgress?.({ type: "status", message: "正在重新提交到发送队列" });
+  const updatedEmail = await retryCampaignEmail(campaignId, emailId, tenantId);
+  await onProgress?.({ type: "status", message: "邮件已重新加入队列" });
+  return updatedEmail;
+}
+
 export async function deleteCampaign(id: string, tenantId: string) {
   await db
     .delete(campaigns)
@@ -286,7 +410,7 @@ export async function deleteCampaign(id: string, tenantId: string) {
 }
 
 export async function getCampaignEmails(campaignId: string) {
-  const emailList = await db
+  const campaignEmails = await db
     .select({
       id: emails.id,
       subject: emails.subject,
@@ -308,5 +432,111 @@ export async function getCampaignEmails(campaignId: string) {
     .where(eq(emails.campaignId, campaignId))
     .orderBy(desc(emails.createdAt));
 
-  return emailList;
+  if (campaignEmails.length === 0) {
+    return campaignEmails;
+  }
+
+  const latestReplies = await getLatestRepliesByEmailId(
+    campaignEmails.map((email) => email.id)
+  );
+
+  return campaignEmails.map((email) => ({
+    ...email,
+    latestReply: latestReplies.get(email.id) || null,
+  }));
+}
+
+async function getCampaignTemplate(templateId: string | null) {
+  if (!templateId) return null;
+
+  const [template] = await db
+    .select()
+    .from(emailTemplates)
+    .where(eq(emailTemplates.id, templateId))
+    .limit(1);
+
+  return template || null;
+}
+
+async function getBoundProspectsWithEmail(campaignId: string) {
+  const rows = await db
+    .select({ prospect: prospects })
+    .from(campaignProspects)
+    .innerJoin(prospects, eq(campaignProspects.prospectId, prospects.id))
+    .where(eq(campaignProspects.campaignId, campaignId));
+
+  return rows.map((row) => row.prospect).filter((prospect) => prospect.email);
+}
+
+async function resolveSender(
+  tenantId: string,
+  userId: string,
+  userEmail?: string
+): Promise<ResolvedSender> {
+  if (!userEmail) {
+    throw new Error("当前登录账号缺少注册邮箱，无法作为活动发件邮箱");
+  }
+
+  const userMailAccount = await getUserMailAccountByRegisteredEmail(tenantId, userId, userEmail);
+  if (!userMailAccount) {
+    throw new Error(`当前账号邮箱 ${userEmail} 未绑定，请先在设置中连接该邮箱`);
+  }
+
+  return {
+    fromEmail: userMailAccount.email,
+    mailAccount: userMailAccount,
+  };
+}
+
+function buildTrackedMessageId(emailId: string, fromEmail: string) {
+  const domain = fromEmail.split("@")[1] || "pitchflow.local";
+  return `<pitchflow-${emailId}@${domain}>`;
+}
+
+function formatEmailHtml(body: string) {
+  return body
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n/g, "<br/>")
+    .replace(/^/, "<p>")
+    .replace(/$/, "</p>");
+}
+
+function buildBaseHeaders(emailId: string, campaignId: string) {
+  return {
+    "X-PitchFlow-Email-ID": emailId,
+    "X-PitchFlow-Campaign-ID": campaignId,
+    "X-Auto-Response-Suppress": "OOF, AutoReply",
+  };
+}
+
+function buildRecipient(address: string, name: string | null) {
+  if (!name) {
+    return { address };
+  }
+
+  return { address, name };
+}
+
+async function getLatestRepliesByEmailId(emailIds: string[]) {
+  const replies = await db
+    .select({
+      emailId: emailReplies.emailId,
+      subject: emailReplies.subject,
+      textBody: emailReplies.textBody,
+      htmlBody: emailReplies.htmlBody,
+      fromEmail: emailReplies.fromEmail,
+      fromName: emailReplies.fromName,
+      receivedAt: emailReplies.receivedAt,
+    })
+    .from(emailReplies)
+    .where(inArray(emailReplies.emailId, emailIds))
+    .orderBy(desc(emailReplies.receivedAt));
+
+  return replies.reduce((replyMap, reply) => {
+    const currentReply = replyMap.get(reply.emailId);
+    if (!currentReply || reply.receivedAt > currentReply.receivedAt) {
+      replyMap.set(reply.emailId, reply);
+    }
+    return replyMap;
+  }, new Map<string, (typeof replies)[number]>());
 }

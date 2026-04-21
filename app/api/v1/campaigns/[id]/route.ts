@@ -5,6 +5,8 @@ import {
   deleteCampaign,
   getCampaignEmails,
 } from "@/lib/services/campaign.service";
+import { getSequenceConfig } from "@/lib/services/followup.service";
+import { getFollowupSettings } from "@/lib/services/config.service";
 import { apiResponse, apiError, handleApiError } from "@/lib/utils/api-handler";
 
 export async function GET(
@@ -16,8 +18,19 @@ export async function GET(
     const campaign = await getCampaign(params.id, tenantId);
     if (!campaign) return apiError("Campaign not found", 404);
 
-    const emailList = await getCampaignEmails(campaign.id);
-    return apiResponse({ ...campaign, emails: emailList });
+    const [emailList, followupSteps, followupSettings] = await Promise.all([
+      getCampaignEmails(campaign.id),
+      getSequenceConfig(campaign.id),
+      getFollowupSettings(),
+    ]);
+
+    return apiResponse({
+      ...campaign,
+      emails: emailList,
+      followupSteps,
+      followupStopAfterDays: followupSettings.stopAfterDays,
+      followupScanIntervalMinutes: followupSettings.scanIntervalMinutes,
+    });
   } catch (error) {
     return handleApiError(error);
   }

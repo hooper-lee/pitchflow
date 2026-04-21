@@ -46,7 +46,7 @@ export function ActivityFeed() {
   }, []);
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <CardTitle className="text-lg">最近动态</CardTitle>
       </CardHeader>
@@ -68,7 +68,7 @@ export function ActivityFeed() {
               const config = typeConfig[item.type] || typeConfig.sent;
               const name = item.prospectName || item.prospectCompany || "未知客户";
               return (
-                <div key={i} className="flex items-start gap-3">
+                <div key={i} className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
                   <div className={`h-2 w-2 mt-2 rounded-full ${config.color}`} />
                   <div className="space-y-0.5 flex-1">
                     <div className="flex items-center gap-2">

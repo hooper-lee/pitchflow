@@ -62,6 +62,17 @@ export const emailStatusEnum = pgEnum("email_status", [
 ]);
 
 export const aiProviderEnum = pgEnum("ai_provider", ["claude", "openai", "custom"]);
+export const mailAccountStateEnum = pgEnum("mail_account_state", [
+  "init",
+  "connecting",
+  "syncing",
+  "connected",
+  "authenticationError",
+  "connectError",
+  "disconnected",
+  "unset",
+]);
+export const mailAccountAuthTypeEnum = pgEnum("mail_account_auth_type", ["imap_smtp", "oauth2"]);
 
 // ── Tables ─────────────────────────────────────────────
 
@@ -164,7 +175,6 @@ export const emailTemplates = pgTable(
     angle: varchar("angle", { length: 100 }),
     productName: varchar("product_name", { length: 255 }),
     senderName: varchar("sender_name", { length: 255 }),
-    senderEmail: varchar("sender_email", { length: 255 }),
     attachments: jsonb("attachments"),
     isDefault: boolean("is_default").default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -204,6 +214,34 @@ export const prospects = pgTable(
     tenantIdx: index("prospects_tenant_idx").on(table.tenantId),
     statusIdx: index("prospects_status_idx").on(table.status),
     emailIdx: index("prospects_email_idx").on(table.email),
+  })
+);
+
+export const mailAccounts = pgTable(
+  "mail_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountKey: varchar("account_key", { length: 255 }).notNull().unique(),
+    email: varchar("email", { length: 255 }).notNull(),
+    name: varchar("name", { length: 255 }),
+    authType: mailAccountAuthTypeEnum("auth_type").default("imap_smtp").notNull(),
+    state: mailAccountStateEnum("state").default("init").notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    lastError: text("last_error"),
+    syncTime: timestamp("sync_time"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("mail_accounts_tenant_idx").on(table.tenantId),
+    userIdx: index("mail_accounts_user_idx").on(table.userId),
+    tenantEmailUnique: unique("mail_accounts_tenant_email_unique").on(table.tenantId, table.email),
   })
 );
 
@@ -315,6 +353,7 @@ export const campaigns = pgTable(
     industry: varchar("industry", { length: 255 }),
     targetPersona: varchar("target_persona", { length: 255 }),
     templateId: uuid("template_id").references(() => emailTemplates.id),
+    mailAccountId: uuid("mail_account_id").references(() => mailAccounts.id),
     fromEmail: varchar("from_email", { length: 255 }),
     aiProvider: aiProviderEnum("ai_provider").default("custom"),
     aiConfig: jsonb("ai_config"),
@@ -361,9 +400,15 @@ export const emails = pgTable(
       .notNull()
       .references(() => prospects.id),
     templateId: uuid("template_id").references(() => emailTemplates.id),
+    mailAccountId: uuid("mail_account_id").references(() => mailAccounts.id),
     stepNumber: integer("step_number").default(1),
     subject: varchar("subject", { length: 500 }),
     body: text("body"),
+    provider: varchar("provider", { length: 50 }).default("resend").notNull(),
+    providerMessageId: varchar("provider_message_id", { length: 500 }),
+    providerQueueId: varchar("provider_queue_id", { length: 255 }),
+    messageHeaderId: varchar("message_header_id", { length: 500 }),
+    threadId: varchar("thread_id", { length: 255 }),
     status: emailStatusEnum("status").default("queued").notNull(),
     resendId: varchar("resend_id", { length: 255 }),
     sentAt: timestamp("sent_at"),
@@ -382,6 +427,38 @@ export const emails = pgTable(
     campaignIdx: index("emails_campaign_idx").on(table.campaignId),
     prospectIdx: index("emails_prospect_idx").on(table.prospectId),
     statusIdx: index("emails_status_idx").on(table.status),
+  })
+);
+
+export const emailReplies = pgTable(
+  "email_replies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    emailId: uuid("email_id")
+      .notNull()
+      .references(() => emails.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    prospectId: uuid("prospect_id")
+      .notNull()
+      .references(() => prospects.id, { onDelete: "cascade" }),
+    mailAccountId: uuid("mail_account_id")
+      .references(() => mailAccounts.id, { onDelete: "set null" }),
+    providerMessageId: varchar("provider_message_id", { length: 500 }),
+    threadId: varchar("thread_id", { length: 255 }),
+    fromEmail: varchar("from_email", { length: 255 }),
+    fromName: varchar("from_name", { length: 255 }),
+    subject: varchar("subject", { length: 500 }),
+    textBody: text("text_body"),
+    htmlBody: text("html_body"),
+    receivedAt: timestamp("received_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    emailIdx: index("email_replies_email_idx").on(table.emailId),
+    prospectIdx: index("email_replies_prospect_idx").on(table.prospectId),
+    providerMessageIdx: index("email_replies_provider_message_idx").on(table.providerMessageId),
   })
 );
 

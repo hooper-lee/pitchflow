@@ -13,7 +13,6 @@ interface Template {
   angle: string | null;
   productName: string | null;
   senderName: string | null;
-  senderEmail: string | null;
   attachments: { filename: string; url: string; size?: number }[] | null;
   isDefault: boolean | null;
 }
@@ -33,7 +32,7 @@ export default function EditTemplatePage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl space-y-6">
+      <div className="max-w-4xl space-y-5">
         <Skeleton className="h-10 w-48" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -45,10 +44,12 @@ export default function EditTemplatePage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">编辑模板</h1>
-        <p className="text-muted-foreground">{template.name}</p>
+    <div className="max-w-4xl page-shell">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">编辑模板</h1>
+          <p className="page-subtitle">{template.name}</p>
+        </div>
       </div>
       <TemplateEditor template={template} />
     </div>

@@ -1,29 +1,18 @@
-import { db } from "@/lib/db";
-import { emails, followupSequences, campaigns, prospects, emailTemplates } from "@/lib/db/schema";
-import { eq, and, lt, isNull, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, desc } from "drizzle-orm";
 import { getAIProviderWithConfig, buildFollowupPrompt } from "@/lib/ai";
-import { getFromAddress } from "@/lib/integrations/resend";
+import { db } from "@/lib/db";
+import {
+  campaigns,
+  campaignProspects,
+  emails,
+  followupSequences,
+  prospects,
+} from "@/lib/db/schema";
+import { submitEmailEngineMessage } from "@/lib/integrations/emailengine";
+import { getFollowupSettings } from "@/lib/services/config.service";
+import { getMailAccountById } from "@/lib/services/mail-account.service";
 
 const FOLLOWUP_ELIGIBLE_EMAIL_STATUSES = ["sent", "delivered", "opened", "clicked"] as const;
-
-function normalizeFollowupSteps(
-  steps: {
-    stepNumber: number;
-    delayDays: number;
-    angle: string;
-    enabled: boolean;
-  }[]
-) {
-  return [...steps]
-    .sort((left, right) => left.stepNumber - right.stepNumber)
-    .map((step, index) => ({
-      campaignId: "",
-      stepNumber: index + 1,
-      delayDays: Math.max(1, step.delayDays),
-      angle: step.angle,
-      enabled: step.enabled,
-    }));
-}
 
 export async function getSequenceConfig(campaignId: string) {
   return db
@@ -42,35 +31,35 @@ export async function saveSequenceConfig(
     enabled: boolean;
   }[]
 ) {
-  // Delete existing config
-  await db
-    .delete(followupSequences)
-    .where(eq(followupSequences.campaignId, campaignId));
+  await db.delete(followupSequences).where(eq(followupSequences.campaignId, campaignId));
 
-  // Insert new config
-  if (steps.length > 0) {
-    const normalizedSteps = normalizeFollowupSteps(steps).map((step) => ({
-      ...step,
+  if (steps.length === 0) {
+    return;
+  }
+
+  const normalizedSteps = [...steps]
+    .sort((left, right) => left.stepNumber - right.stepNumber)
+    .map((step, index) => ({
       campaignId,
+      stepNumber: index + 1,
+      delayDays: Math.max(1, step.delayDays),
+      angle: step.angle,
+      enabled: step.enabled,
     }));
 
-    await db
-      .insert(followupSequences)
-      .values(normalizedSteps);
-  }
+  await db.insert(followupSequences).values(normalizedSteps);
 }
 
 export async function processPendingFollowups() {
   const now = new Date();
-
-  // Find all active campaigns with follow-up sequences
+  const followupSettings = await getFollowupSettings();
   const activeCampaigns = await db
     .select({
       id: campaigns.id,
       aiProvider: campaigns.aiProvider,
       aiConfig: campaigns.aiConfig,
-      templateId: campaigns.templateId,
       fromEmail: campaigns.fromEmail,
+      mailAccountId: campaigns.mailAccountId,
     })
     .from(campaigns)
     .where(eq(campaigns.status, "active"));
@@ -78,166 +67,297 @@ export async function processPendingFollowups() {
   let totalProcessed = 0;
 
   for (const campaign of activeCampaigns) {
-    const sequences = await getSequenceConfig(campaign.id);
-    if (sequences.length === 0) continue;
+    const sequence = await getSequenceConfig(campaign.id);
+    if (sequence.length === 0) continue;
 
-    for (const seq of sequences) {
-      if (!seq.enabled) continue;
+    const sender = await resolveFollowupSender(
+      campaign.mailAccountId || null,
+      campaign.fromEmail || null
+    );
 
-      // Find emails that need follow-up:
-      // - Sent N+ days ago (where N = delayDays for this step)
-      // - No reply yet
-      // - This step not yet sent
+    for (const step of sequence) {
+      if (!step.enabled) continue;
+
       const cutoffDate = new Date(now);
-      cutoffDate.setDate(cutoffDate.getDate() - seq.delayDays);
-      const previousEmailStepNumber = seq.stepNumber;
-      const followupEmailStepNumber = seq.stepNumber + 1;
+      cutoffDate.setDate(cutoffDate.getDate() - step.delayDays);
 
-      // Each follow-up round N is scheduled off the previous email step N.
       const eligibleEmails = await db
         .select({
           id: emails.id,
-          prospectId: emails.prospectId,
           campaignId: emails.campaignId,
+          prospectId: emails.prospectId,
           body: emails.body,
-          subject: emails.subject,
+          providerMessageId: emails.providerMessageId,
+          threadId: emails.threadId,
         })
         .from(emails)
         .where(
           and(
             eq(emails.campaignId, campaign.id),
-            eq(emails.stepNumber, previousEmailStepNumber),
+            eq(emails.stepNumber, step.stepNumber),
             lt(emails.sentAt, cutoffDate),
             inArray(emails.status, FOLLOWUP_ELIGIBLE_EMAIL_STATUSES),
-            isNull(emails.repliedAt) // No reply yet
+            isNull(emails.repliedAt)
           )
         );
 
-      for (const email of eligibleEmails) {
-        // Check if this follow-up step was already sent
+      for (const previousEmail of eligibleEmails) {
         const [existingFollowup] = await db
-          .select()
+          .select({ id: emails.id })
           .from(emails)
           .where(
             and(
               eq(emails.campaignId, campaign.id),
-              eq(emails.prospectId, email.prospectId),
-              eq(emails.stepNumber, followupEmailStepNumber)
+              eq(emails.prospectId, previousEmail.prospectId),
+              eq(emails.stepNumber, step.stepNumber + 1)
             )
           )
           .limit(1);
 
         if (existingFollowup) continue;
 
-        // Get prospect data for AI generation
         const [prospect] = await db
           .select()
           .from(prospects)
-          .where(eq(prospects.id, email.prospectId))
+          .where(eq(prospects.id, previousEmail.prospectId))
           .limit(1);
 
         if (!prospect?.email) continue;
 
-        // Generate follow-up email with AI
         try {
           const ai = getAIProviderWithConfig(
             campaign.aiProvider || "custom",
             campaign.aiConfig as { baseURL?: string; apiKey?: string; model?: string } | undefined
           );
-          const prompt = buildFollowupPrompt({
-            prospectName: prospect.contactName || "there",
-            companyName: prospect.companyName || "your company",
-            industry: prospect.industry || "",
-            country: prospect.country || "",
-            productName: "our products and services",
-            senderName: "Our Team",
-            angle: seq.angle || "value_prop",
-            previousEmailBody: email.body || "",
-            stepNumber: seq.stepNumber,
+          const generatedEmail = await ai.generateEmail({
+            prompt: buildFollowupPrompt({
+              prospectName: prospect.contactName || "there",
+              companyName: prospect.companyName || "your company",
+              industry: prospect.industry || "",
+              country: prospect.country || "",
+              productName: "our products and services",
+              senderName: "Our Team",
+              angle: step.angle || "value_prop",
+              previousEmailBody: previousEmail.body || "",
+              stepNumber: step.stepNumber,
+            }),
           });
 
-          const result = await ai.generateEmail({ prompt });
-
-          // Create follow-up email record
           const [followupEmail] = await db
             .insert(emails)
             .values({
               campaignId: campaign.id,
-              prospectId: email.prospectId,
-              templateId: seq.templateId,
-              stepNumber: followupEmailStepNumber,
-              subject: result.subject,
-              body: result.body,
+              prospectId: previousEmail.prospectId,
+              templateId: step.templateId,
+              mailAccountId: sender.mailAccount.id,
+              stepNumber: step.stepNumber + 1,
+              subject: generatedEmail.subject,
+              body: generatedEmail.body,
+              provider: "emailengine",
               status: "queued",
             })
             .returning();
 
-          // Send the follow-up
-          const { sendEmail } = await import("@/lib/integrations/resend");
-          const fromAddress = await resolveFollowupFromEmail(
-            campaign.fromEmail || null,
-            seq.templateId || campaign.templateId || null
-          );
-          const html = (result.body || "")
-            .replace(/\n\n/g, "</p><p>")
-            .replace(/\n/g, "<br/>")
-            .replace(/^/, "<p>")
-            .replace(/$/, "</p>");
-
-          const sendResult = await sendEmail({
-            from: fromAddress,
-            to: prospect.email,
-            subject: result.subject,
+          const messageHeaderId = buildTrackedMessageId(followupEmail.id, sender.fromEmail);
+          const html = formatEmailHtml(generatedEmail.body || "");
+          const submitResult = await submitEmailEngineMessage(sender.mailAccount.accountKey, {
+            from: { address: sender.fromEmail },
+            to: [buildRecipient(prospect.email, prospect.contactName)],
+            subject: generatedEmail.subject,
+            text: generatedEmail.body || "",
             html,
-            tags: [
-              { name: "email_id", value: followupEmail.id },
-              { name: "campaign_id", value: campaign.id },
-              { name: "step", value: String(seq.stepNumber) },
-            ],
+            messageId: messageHeaderId,
+            headers: buildThreadHeaders(
+              followupEmail.id,
+              campaign.id,
+              previousEmail.providerMessageId
+            ),
+            trackOpens: true,
+            trackClicks: true,
           });
 
           await db
             .update(emails)
             .set({
-              status: "sent",
-              resendId: sendResult.id,
-              sentAt: new Date(),
+              providerQueueId: submitResult?.queueId || null,
+              providerMessageId: submitResult?.messageId || messageHeaderId,
+              messageHeaderId,
+              mailAccountId: sender.mailAccount.id,
+              threadId: previousEmail.threadId || submitResult?.messageId || messageHeaderId,
             })
             .where(eq(emails.id, followupEmail.id));
 
           totalProcessed++;
-        } catch (err) {
-          console.error(
-            `Failed to process follow-up for prospect ${email.prospectId}:`,
-            err
-          );
+        } catch (error) {
+          console.error(`Failed to process follow-up for prospect ${previousEmail.prospectId}:`, error);
+          await db
+            .update(emails)
+            .set({ status: "failed" })
+            .where(
+              and(
+                eq(emails.campaignId, campaign.id),
+                eq(emails.prospectId, previousEmail.prospectId),
+                eq(emails.stepNumber, step.stepNumber + 1),
+                eq(emails.status, "queued")
+              )
+            );
         }
       }
     }
+
+    await completeCampaignIfFinished(campaign.id, followupSettings.stopAfterDays);
   }
 
   return { totalProcessed };
 }
 
-async function resolveFollowupFromEmail(
-  campaignFromEmail: string | null,
-  templateId: string | null
+export async function completeCampaignIfFinished(
+  campaignId: string,
+  stopAfterDays: number
 ) {
-  if (campaignFromEmail) {
-    return campaignFromEmail;
+  const campaignProspectRows = await db
+    .select({ prospectId: campaignProspects.prospectId })
+    .from(campaignProspects)
+    .where(eq(campaignProspects.campaignId, campaignId));
+
+  if (campaignProspectRows.length === 0) {
+    return;
   }
 
-  if (templateId) {
-    const [template] = await db
-      .select({ senderEmail: emailTemplates.senderEmail })
-      .from(emailTemplates)
-      .where(eq(emailTemplates.id, templateId))
-      .limit(1);
+  const finalStepNumber = (await getFinalOutboundStepNumber(campaignId)) || 1;
+  const latestEmails = await db
+    .select({
+      prospectId: emails.prospectId,
+      stepNumber: emails.stepNumber,
+      sentAt: emails.sentAt,
+      repliedAt: emails.repliedAt,
+    })
+    .from(emails)
+    .where(eq(emails.campaignId, campaignId))
+    .orderBy(desc(emails.stepNumber), desc(emails.createdAt));
 
-    if (template?.senderEmail) {
-      return template.senderEmail;
+  const latestEmailMap = buildLatestEmailMap(latestEmails);
+  const stopDate = buildStopDate(stopAfterDays);
+  const allFinished = campaignProspectRows.every(({ prospectId }) =>
+    hasProspectFinished(latestEmailMap.get(prospectId), finalStepNumber, stopDate)
+  );
+
+  if (!allFinished) {
+    return;
+  }
+
+  await db
+    .update(campaigns)
+    .set({ status: "completed", updatedAt: new Date() })
+    .where(eq(campaigns.id, campaignId));
+}
+
+async function resolveFollowupSender(mailAccountId: string | null, fromEmail: string | null) {
+  if (!mailAccountId || !fromEmail) {
+    throw new Error("跟进发件邮箱缺失：请先启动活动并固化发件邮箱");
+  }
+
+  const mailAccount = await getMailAccountById(mailAccountId);
+  if (!mailAccount) {
+    throw new Error("跟进邮箱账号不存在，请重新绑定后再执行跟进");
+  }
+
+  return { mailAccount, fromEmail };
+}
+
+function buildTrackedMessageId(emailId: string, fromEmail: string) {
+  const domain = fromEmail.split("@")[1] || "pitchflow.local";
+  return `<pitchflow-${emailId}@${domain}>`;
+}
+
+function formatEmailHtml(body: string) {
+  return body
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n/g, "<br/>")
+    .replace(/^/, "<p>")
+    .replace(/$/, "</p>");
+}
+
+function buildThreadHeaders(
+  emailId: string,
+  campaignId: string,
+  previousMessageId: string | null
+) {
+  const headers: Record<string, string> = {
+    "X-PitchFlow-Email-ID": emailId,
+    "X-PitchFlow-Campaign-ID": campaignId,
+    "X-Auto-Response-Suppress": "OOF, AutoReply",
+  };
+
+  if (previousMessageId) {
+    headers["In-Reply-To"] = previousMessageId;
+    headers["References"] = previousMessageId;
+  }
+
+  return headers;
+}
+
+function buildRecipient(address: string, name: string | null) {
+  if (!name) {
+    return { address };
+  }
+
+  return { address, name };
+}
+
+async function getFinalOutboundStepNumber(campaignId: string) {
+  const sequence = await getSequenceConfig(campaignId);
+  if (sequence.length === 0) {
+    return 1;
+  }
+
+  return Math.max(...sequence.map((step) => step.stepNumber)) + 1;
+}
+
+function buildLatestEmailMap(
+  latestEmails: {
+    prospectId: string;
+    stepNumber: number | null;
+    sentAt: Date | null;
+    repliedAt: Date | null;
+  }[]
+) {
+  return latestEmails.reduce((emailMap, email) => {
+    if (!emailMap.has(email.prospectId)) {
+      emailMap.set(email.prospectId, email);
     }
+    return emailMap;
+  }, new Map<string, (typeof latestEmails)[number]>());
+}
+
+function buildStopDate(stopAfterDays: number) {
+  const stopDate = new Date();
+  stopDate.setDate(stopDate.getDate() - stopAfterDays);
+  return stopDate;
+}
+
+function hasProspectFinished(
+  latestEmail:
+    | {
+        stepNumber: number | null;
+        sentAt: Date | null;
+        repliedAt: Date | null;
+      }
+    | undefined,
+  finalStepNumber: number,
+  stopDate: Date
+) {
+  if (!latestEmail) {
+    return false;
   }
 
-  return getFromAddress();
+  if (latestEmail.repliedAt) {
+    return true;
+  }
+
+  return (
+    (latestEmail.stepNumber || 1) >= finalStepNumber &&
+    !!latestEmail.sentAt &&
+    latestEmail.sentAt <= stopDate
+  );
 }

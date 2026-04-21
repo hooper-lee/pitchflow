@@ -1,76 +1,65 @@
 # PitchFlow
 
-**AI-Powered B2B Sales Development Platform for Global Trade**
+PitchFlow 是一个帮助外贸团队筛选潜在客户、生成个性化开发信并管理跟进节奏的 AI 获客助手，把「客户挖掘 -> AI 调研评分 -> 个性化发信 -> 自动跟进 -> 消息追踪」压到同一条工作流里。
 
-PitchFlow is an intelligent customer development system designed for export-oriented businesses. It automates the entire sales pipeline—from prospect discovery and AI-driven research to personalized outreach, automated follow-up, and high-intent alerts—all in one seamless workflow.
+## 当前产品能力
 
-## Business Value
+- **客户挖掘**：按行业 / 关键词 / 国家偏置搜索官网候选，过滤重复网站并记录搜索评分
+- **官网识别引擎**：Cheerio 抓取 + 5 维度评分，筛出更像真实客户官网的站点
+- **AI 调研评分**：抽取公司规模、类型、主要产品、目标市场、决策人，并生成五维评分、等级和推荐动作
+- **双评分客户分层**：同时保留搜索评分与调研评分，区分“值得入库”和“值得优先联系”
+- **流式 AI 体验**：模板 AI 生成支持流式回填，客户调研支持阶段式进度反馈，活动启动支持批量邮件生成进度
+- **活动与自动跟进**：按评分筛选客户进入活动，支持默认 3 / 7 / 14 天自动跟进与停止跟进天数控制
+- **用户自有邮箱接入**：通过 EmailEngine 连接用户自己的 IMAP / SMTP 邮箱，实现发信与回复读取
+- **消息追踪**：客户回复后可触发邮件、飞书、企微消息追踪，并携带回复摘要
+- **活动状态闭环**：客户回复后停止后续跟进；活动内客户都回复或达到停止条件后，活动自动完成
 
-### Drive Revenue Growth
-- **Smart Prospect Discovery**: Automatically identify qualified prospects by industry, keywords, and geography, eliminating manual research
-- **AI-Powered Lead Scoring**: Leverage advanced research scoring across 5 critical dimensions to prioritize high-value opportunities
-- **Personalized Outreach at Scale**: Generate contextual, personalized emails based on company research, not templates
-- **Conversion Acceleration**: Multi-channel follow-up automation (email, Feishu, WeChat Work) ensures no lead falls through the cracks
+## 典型工作流
 
-### Key Capabilities
-
-| Feature | Benefit |
-|---------|---------|
-| **Website Identification Engine** | Filters noise and identifies real customer websites using 5-dimensional scoring |
-| **Company Intelligence** | Extracts company size, type, products, target markets, and decision-makers automatically |
-| **Tiered Lead Management** | Distinguish "worth adding to database" from "worth contacting first" with dual scoring |
-| **Email Campaign Management** | Flexible email templates with independent sender addresses for brand consistency |
-| **Activity Management & Auto-Follow-Up** | Keep all touchpoints consistent through the sales cycle with unified email tracking |
-| **High-Intent Alerts** | Instant notifications via email, Feishu, or WeChat Work when prospects open, click, or reply |
-
-## How It Works
-
-```
-Industry/Keyword Search
-  → Website Identification & Deduplication
-  → Prospect Database Entry
-  → AI Research & 5D Scoring
-  → A/B/C/D Lead Tier Segmentation
-  → Create Sales Campaign
-  → Send Personalized Outreach
-  → Auto Follow-Up & Intent Tracking
+```text
+行业 / 关键词搜索
+  -> 官网识别与去重
+  -> 客户入库
+  -> AI 调研与五维评分
+  -> 按 A/B/C/D 分层筛选
+  -> 创建营销活动
+  -> 使用当前登录账号注册邮箱对应的已连接邮箱账号发信
+  -> 自动跟进与消息追踪
 ```
 
-## Landing Page Demos
+## Landing 页说明
 
-Get an instant understanding of system capabilities:
+- **客户挖掘结果演示**：展示搜索结果如何带搜索评分进入列表，以及为什么某些官网更值得入库
+- **AI 调研结果演示**：展示结构化画像、五维评分、综合评分和推荐动作，而不是一段难复用的摘要文本
 
-- **Prospect Discovery Results**: See how search results include scoring and why certain websites are worth pursuing
-- **AI Research Output**: Structured company profiles, 5D scoring, composite scores, and recommended next actions—not just text summaries
+## 技术栈
 
-## Tech Stack
+| 层 | 技术 |
+|---|---|
+| 前端 | Next.js 14 (App Router) + React + Tailwind CSS + shadcn/ui |
+| 后端 | Next.js API Routes + Drizzle ORM |
+| 数据库 | PostgreSQL |
+| 认证 | NextAuth.js |
+| 搜索引擎 | SearXNG（自部署，无配额限制） |
+| 页面抓取 | Cheerio（Playwright 可选兜底） |
+| 邮件发送 / 收信 | EmailEngine |
+| AI | OpenAI 兼容接口（Claude / 自定义） |
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14 (App Router) + React + Tailwind CSS + shadcn/ui |
-| Backend | Next.js API Routes + Drizzle ORM |
-| Database | PostgreSQL |
-| Authentication | NextAuth.js |
-| Search Engine | SearXNG (self-hosted, unlimited) |
-| Web Scraping | Cheerio (Playwright fallback) |
-| Email Service | Resend |
-| AI | OpenAI-compatible API (Claude / custom) |
+## 快速开始
 
-## Getting Started
-
-### 1. Install Dependencies
+### 1. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. 配置环境变量
 
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local` with at minimum:
+编辑 `.env.local`，至少填入数据库和认证配置：
 
 ```env
 DATABASE_URL=postgresql://user:pass@localhost:5432/pitchflow
@@ -78,16 +67,17 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-here
 ```
 
-For full platform capabilities, also configure:
+如果要启用完整能力，还需要配置：
 
 - `CUSTOM_AI_BASE_URL`
 - `CUSTOM_AI_API_KEY`
 - `CUSTOM_AI_MODEL`
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
+- `EMAILENGINE_URL`
+- `EMAILENGINE_ACCESS_TOKEN`
+- `EMAILENGINE_WEBHOOK_BASE_URL`
 - `SEARXNG_BASE_URL`
 
-### 3. Start Search Engine (SearXNG)
+### 3. 启动搜索引擎（SearXNG）
 
 ```bash
 docker run -d --name searxng -p 8888:8080 \
@@ -95,101 +85,112 @@ docker run -d --name searxng -p 8888:8080 \
   searxng/searxng
 ```
 
-Verify:
+验证：
 
 ```bash
 curl http://localhost:8888/search?q=test&format=json
 ```
 
-### 4. Initialize Database
+### 4. 初始化数据库
 
 ```bash
 npm run db:push
 ```
 
-### 5. Seed Detector Blacklist
+### 5. 初始化探测器黑名单
 
 ```bash
 npx tsx scripts/seed-detector.ts
 ```
 
-### 6. Start Development Server
+### 6. 启动开发服务器
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+访问 [http://localhost:3000](http://localhost:3000)
 
-### 7. Create Admin Account
+### 7. 创建管理员账号
 
-Visit [http://localhost:3000/register](http://localhost:3000/register) to register the first account (auto-promoted to super admin).
+访问 [http://localhost:3000/register](http://localhost:3000/register) 注册第一个账号，自动成为超级管理员。
 
-## Admin Configuration
+## 后台配置
 
-Access `/admin` for platform configuration:
+访问 `/admin` 进入管理后台：
 
-- **System Settings** `(/admin/configs)`: AI models, email service, search engine, scoring weights, and prompts
-- **Website Detector** `(/admin/detector)`: Domain blacklists, TLD filters, scoring weights, Playwright settings
+- **系统配置** `(/admin/configs)`：AI 模型、EmailEngine、搜索引擎地址、Prompt、评分权重
+- **网站检测器** `(/admin/detector)`：域名黑名单、TLD 黑名单、评分权重、Playwright 开关
 
-## Prospect Discovery Process
+用户侧还需要先到 `设置 -> 邮箱账号` 连接自己的邮箱，活动发送、回复读取和消息追踪都依赖这里的账号。
 
+## 客户挖掘流程
+
+```text
+关键词搜索 -> SearXNG（多页聚合）
+    ↓
+URL 黑名单过滤（域名 + TLD 后缀）
+    ↓
+Cheerio 批量抓取页面（Playwright 可选兜底）
+    ↓
+5 维度信号提取 + 100 分制评分
+    ↓
+按评分排序，筛选 >= 25 分的官网
+    ↓
+提取联系方式（邮箱 / 电话 / 公司名）
+    ↓
+三级降级：直接提取 -> Hunter/Snov -> 邮箱模式推断
+    ↓
+入库并保留搜索评分
 ```
-Keyword Search → SearXNG (multi-page aggregation)
-    ↓
-URL Blacklist Filtering (domain + TLD suffixes)
-    ↓
-Cheerio Batch Crawl (with Playwright fallback)
-    ↓
-5-Dimension Signal Extraction + 100-Point Scoring
-    ↓
-Sort by Score & Filter >= 25 points
-    ↓
-Contact Information Extraction (email/phone/company)
-    ↓
-3-Level Fallback: Direct → Hunter/Snov → Pattern Inference
-    ↓
-Add to Database with Search Score Preserved
-```
 
-## Research & Outreach Rules
+## 调研与发信规则
 
-- **Dual Scoring System**:
-  - `Search Score`: Indicates website relevance for database entry
-  - `Research Score`: Indicates lead quality for prioritized contact
-- **Research Deliverables**:
-  - Company profile
-  - 5D scoring breakdown
-  - A/B/C/D lead tier
-  - Recommended action
-- **Email Sending Logic**:
-  - Template with configured sender: use template sender
-  - No template or unconfigured: use account email
-  - Once campaign starts, sender email is locked in for all follow-ups
+- 客户列表同时显示两套分数：
+  - `搜索评分`：判断官网候选是否值得入库
+  - `调研评分`：判断客户是否值得优先联系
+- 调研完成后会生成：
+  - 公司画像
+  - 五维评分
+  - A/B/C/D 等级
+  - 推荐动作
+- 邮件发送规则：
+  - 模板不再单独配置发件邮箱
+  - 活动发送统一使用当前登录账号注册邮箱对应的已连接邮箱账号
+  - 活动启动后会把实际发件邮箱固化到活动上，后续跟进保持一致
+- 消息追踪规则：
+  - 只在客户直接回复邮件时触发
+  - 支持邮件、飞书、企业微信三种通知方式
+  - 通知内容包含联系人、公司、活动、回复主题、回复时间、回复摘要
+- AI 交互规则：
+  - 模板 AI 生成走流式输出
+  - 客户调研显示阶段式进度
+  - 活动启动显示批量邮件生成进度
+  - 单封失败邮件重新同步支持局部流式进度
 
-## Project Structure
+## 项目结构
 
-```
+```bash
 ├── app/
-│   ├── (dashboard)/          # Main platform pages
-│   │   ├── prospects/        # Prospect mgmt + discovery + research
-│   │   ├── campaigns/        # Sales campaigns
-│   │   ├── templates/        # Email templates
-│   │   └── settings/         # User settings & alerts
-│   ├── admin/                # Admin dashboard
-│   │   ├── configs/          # System configuration
-│   │   └── detector/         # Website detector config
+│   ├── (dashboard)/          # 工作台页面
+│   │   ├── prospects/        # 客户管理 + 挖掘 + 调研
+│   │   ├── campaigns/        # 营销活动
+│   │   ├── templates/        # 邮件模板
+│   │   └── settings/         # 用户设置与消息追踪
+│   ├── admin/                # 管理后台
+│   │   ├── configs/          # 系统配置
+│   │   └── detector/         # 网站检测器配置
 │   └── api/v1/               # REST API
 ├── components/
-│   ├── landing/              # Landing page components
-│   ├── prospects/            # Prospect discovery components
-│   ├── campaigns/            # Campaign components
-│   └── templates/            # Template editor
+│   ├── landing/              # Landing 页面展示组件
+│   ├── prospects/            # 客户与挖掘相关组件
+│   ├── campaigns/            # 活动与跟进组件
+│   └── templates/            # 模板编辑组件
 ├── lib/
-│   ├── detector/             # Website ID engine (filter/fetch/score/extract)
-│   ├── integrations/         # External services (SearXNG/Resend/Hunter/Snov)
-│   ├── services/             # Business logic layer
-│   ├── db/                   # Database schema + connection + migrations
-│   └── utils/                # Utility functions
-└── scripts/                  # Seed data scripts
+│   ├── detector/             # 官网识别引擎（过滤 / 抓取 / 评分 / 提取）
+│   ├── integrations/         # 外部服务（SearXNG / EmailEngine / Hunter / Snov）
+│   ├── services/             # 业务逻辑层
+│   ├── db/                   # 数据库 Schema + 连接 + migration
+│   └── utils/                # 工具函数
+└── scripts/                  # 种子数据脚本
 ```

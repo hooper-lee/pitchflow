@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { ArrowLeft, UserPlus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -14,16 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, ArrowLeft } from "lucide-react";
-import Link from "next/link";
 
 interface Member {
   id: string;
@@ -49,69 +49,93 @@ export default function TeamPage() {
   }, []);
 
   const handleInvite = async () => {
-    const res = await fetch("/api/v1/team", {
+    const response = await fetch("/api/v1/team", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: inviteEmail }),
     });
 
-    if (res.ok) {
-      toast({ title: "邀请已发送" });
-      setInviteOpen(false);
-      setInviteEmail("");
-      window.location.reload();
-    } else {
+    if (!response.ok) {
       toast({ title: "邀请失败", variant: "destructive" });
+      return;
     }
+
+    toast({ title: "邀请已发送" });
+    setInviteOpen(false);
+    setInviteEmail("");
+    window.location.reload();
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/settings">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">团队管理</h1>
-          <p className="text-muted-foreground">管理团队成员和权限</p>
+    <div className="page-shell max-w-5xl">
+      <div className="page-header">
+        <div className="flex items-center gap-4">
+          <Link href="/settings">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="page-title">团队管理</h1>
+            <p className="page-subtitle">管理成员权限与协作范围，邀请邮箱加入当前工作区。</p>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>团队成员</CardTitle>
-          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <UserPlus className="mr-2 h-4 w-4" />
-                邀请成员
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>邀请团队成员</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">邮箱</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="teammate@example.com"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                  />
+      <div className="metric-grid md:grid-cols-3">
+        <Card className="section-card">
+          <CardContent className="p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">团队成员</p>
+            <p className="mt-3 text-3xl font-semibold text-slate-900">{members.length}</p>
+            <p className="mt-2 text-sm text-slate-500">统一查看管理员、成员和只读账号。</p>
+          </CardContent>
+        </Card>
+        <Card className="section-card md:col-span-2">
+          <CardContent className="flex h-full items-center justify-between gap-4 p-5">
+            <div>
+              <p className="text-sm font-medium text-slate-900">快速邀请成员</p>
+              <p className="mt-1 text-sm text-slate-500">通过邮箱发送邀请，成员加入后可共享客户、模板和活动。</p>
+            </div>
+            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  邀请成员
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="rounded-[28px] border-slate-200/80 bg-white">
+                <DialogHeader>
+                  <DialogTitle>邀请团队成员</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">邮箱</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="teammate@example.com"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleInvite}>发送邀请</Button>
                 </div>
-                <Button onClick={handleInvite}>发送邀请</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="section-card">
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardTitle>成员列表</CardTitle>
+          <Badge variant="outline" className="rounded-full px-3 py-1">
+            共 {members.length} 人
+          </Badge>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-center py-4 text-muted-foreground">加载中...</p>
+            <p className="py-6 text-center text-muted-foreground">加载中...</p>
           ) : (
             <Table>
               <TableHeader>
@@ -129,7 +153,13 @@ export default function TeamPage() {
                     <TableCell>{member.email}</TableCell>
                     <TableCell>
                       <Badge variant={member.role === "team_admin" ? "default" : "secondary"}>
-                        {member.role === "team_admin" ? "管理员" : member.role === "member" ? "成员" : member.role === "viewer" ? "只读" : member.role}
+                        {member.role === "team_admin"
+                          ? "管理员"
+                          : member.role === "member"
+                            ? "成员"
+                            : member.role === "viewer"
+                              ? "只读"
+                              : member.role}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">

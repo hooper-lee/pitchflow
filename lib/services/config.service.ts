@@ -18,6 +18,11 @@ export const SCORING_WEIGHT_KEYS = {
   RISK_PENALTY: "AI_SCORE_WEIGHT_RISK_PENALTY",
 } as const;
 
+export const FOLLOWUP_SETTING_KEYS = {
+  STOP_AFTER_DAYS: "FOLLOWUP_STOP_AFTER_DAYS",
+  SCAN_INTERVAL_MINUTES: "FOLLOWUP_SCAN_INTERVAL_MINUTES",
+} as const;
+
 export const DEFAULT_SCORING_WEIGHTS = {
   [SCORING_WEIGHT_KEYS.ICP_FIT]: 25,
   [SCORING_WEIGHT_KEYS.BUYING_INTENT]: 25,
@@ -26,12 +31,22 @@ export const DEFAULT_SCORING_WEIGHTS = {
   [SCORING_WEIGHT_KEYS.RISK_PENALTY]: 10,
 } as const;
 
+export const DEFAULT_FOLLOWUP_SETTINGS = {
+  [FOLLOWUP_SETTING_KEYS.STOP_AFTER_DAYS]: 30,
+  [FOLLOWUP_SETTING_KEYS.SCAN_INTERVAL_MINUTES]: 15,
+} as const;
+
 export interface ProspectScoringWeights {
   icpFit: number;
   buyingIntent: number;
   reachability: number;
   dealPotential: number;
   riskPenalty: number;
+}
+
+export interface FollowupSettings {
+  stopAfterDays: number;
+  scanIntervalMinutes: number;
 }
 
 // 默认 Prompt 值
@@ -308,6 +323,26 @@ export async function getDefaultResearchProvider(): Promise<
   return "claude";
 }
 
+export async function getFollowupSettings(): Promise<FollowupSettings> {
+  const rows = await db
+    .select({ key: systemConfigs.key, value: systemConfigs.value })
+    .from(systemConfigs);
+  const configMap = new Map(rows.map((row) => [row.key, row.value]));
+
+  return {
+    stopAfterDays: readNumericSetting(
+      configMap,
+      FOLLOWUP_SETTING_KEYS.STOP_AFTER_DAYS,
+      DEFAULT_FOLLOWUP_SETTINGS[FOLLOWUP_SETTING_KEYS.STOP_AFTER_DAYS]
+    ),
+    scanIntervalMinutes: readNumericSetting(
+      configMap,
+      FOLLOWUP_SETTING_KEYS.SCAN_INTERVAL_MINUTES,
+      DEFAULT_FOLLOWUP_SETTINGS[FOLLOWUP_SETTING_KEYS.SCAN_INTERVAL_MINUTES]
+    ),
+  };
+}
+
 function getPromptDescription(key: string): string {
   const descriptions: Record<string, string> = {
     [AI_PROMPT_KEYS.PROSPECT_RESEARCH_SYSTEM]:
@@ -339,6 +374,13 @@ export async function initDefaultAiPrompts(): Promise<void> {
       await setConfig(key, String(value), getScoringWeightDescription(key));
     }
   }
+
+  for (const [key, value] of Object.entries(DEFAULT_FOLLOWUP_SETTINGS)) {
+    const existing = await getConfig(key);
+    if (!existing) {
+      await setConfig(key, String(value), getFollowupSettingDescription(key));
+    }
+  }
 }
 
 export function getScoringWeightDescription(key: string): string {
@@ -351,4 +393,25 @@ export function getScoringWeightDescription(key: string): string {
   };
 
   return descriptions[key] || "";
+}
+
+export function getFollowupSettingDescription(key: string): string {
+  const descriptions: Record<string, string> = {
+    [FOLLOWUP_SETTING_KEYS.STOP_AFTER_DAYS]:
+      "自动跟进：最后一轮邮件发出后，超过多少天仍未回复则停止继续跟进",
+    [FOLLOWUP_SETTING_KEYS.SCAN_INTERVAL_MINUTES]:
+      "自动跟进：系统定时扫描频率（分钟，仅展示）",
+  };
+
+  return descriptions[key] || "";
+}
+
+function readNumericSetting(
+  configMap: Map<string, string>,
+  key: string,
+  fallback: number
+) {
+  const rawValue = configMap.get(key);
+  const parsedValue = rawValue ? Number(rawValue) : NaN;
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
 }

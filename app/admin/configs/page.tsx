@@ -57,6 +57,16 @@ const DEFAULT_SCORING_WEIGHTS = {
   [SCORING_WEIGHT_KEYS.RISK_PENALTY]: "10",
 };
 
+const FOLLOWUP_SETTING_KEYS = {
+  STOP_AFTER_DAYS: "FOLLOWUP_STOP_AFTER_DAYS",
+  SCAN_INTERVAL_MINUTES: "FOLLOWUP_SCAN_INTERVAL_MINUTES",
+};
+
+const DEFAULT_FOLLOWUP_SETTINGS = {
+  [FOLLOWUP_SETTING_KEYS.STOP_AFTER_DAYS]: "30",
+  [FOLLOWUP_SETTING_KEYS.SCAN_INTERVAL_MINUTES]: "15",
+};
+
 const CONFIG_SECTIONS: ConfigSection[] = [
   {
     title: "AI 模型",
@@ -69,11 +79,12 @@ const CONFIG_SECTIONS: ConfigSection[] = [
     ],
   },
   {
-    title: "邮件服务",
-    description: "Resend 邮件发送配置",
+    title: "EmailEngine",
+    description: "用户自有邮箱账号发送 / 收信中间层配置",
     fields: [
-      { key: "RESEND_API_KEY", label: "Resend API Key", secret: true, placeholder: "re_..." },
-      { key: "RESEND_FROM_EMAIL", label: "发件人邮箱", secret: false, placeholder: "noreply@yourdomain.com" },
+      { key: "EMAILENGINE_URL", label: "EmailEngine URL", secret: false, placeholder: "由部署环境自动注入", readonly: true },
+      { key: "EMAILENGINE_ACCESS_TOKEN", label: "EmailEngine Access Token", secret: true, placeholder: "由部署环境自动注入", readonly: true },
+      { key: "EMAILENGINE_WEBHOOK_SECRET", label: "Webhook Secret（可选）", secret: true, placeholder: "由部署环境自动注入", readonly: true },
     ],
   },
   {
@@ -169,6 +180,26 @@ const SCORING_WEIGHT_SECTION: ConfigSection = {
   ],
 };
 
+const FOLLOWUP_SETTING_SECTION: ConfigSection = {
+  title: "自动跟进",
+  description: "配置自动跟进停止天数。系统扫描频率固定为 15 分钟一次，仅在这里展示说明。",
+  fields: [
+    {
+      key: FOLLOWUP_SETTING_KEYS.STOP_AFTER_DAYS,
+      label: "停止跟进天数",
+      secret: false,
+      placeholder: "30",
+    },
+    {
+      key: FOLLOWUP_SETTING_KEYS.SCAN_INTERVAL_MINUTES,
+      label: "系统扫描频率（分钟）",
+      secret: false,
+      placeholder: "15",
+      readonly: true,
+    },
+  ],
+};
+
 export default function AdminConfigsPage() {
   const { toast } = useToast();
   const [configs, setConfigs] = useState<Record<string, string>>({});
@@ -182,7 +213,10 @@ export default function AdminConfigsPage() {
       fetch("/api/admin/ai-prompts").then((r) => r.json()),
     ])
       .then(([configsData, promptsData]) => {
-        const map: Record<string, string> = { ...DEFAULT_SCORING_WEIGHTS };
+        const map: Record<string, string> = {
+          ...DEFAULT_SCORING_WEIGHTS,
+          ...DEFAULT_FOLLOWUP_SETTINGS,
+        };
         for (const c of configsData.data || []) {
           map[c.key] = c.value;
         }
@@ -206,6 +240,7 @@ export default function AdminConfigsPage() {
         ...CONFIG_SECTIONS,
         AI_PROMPT_SECTION,
         SCORING_WEIGHT_SECTION,
+        FOLLOWUP_SETTING_SECTION,
       ];
 
       const promises = sectionsToSave.flatMap((section) =>
@@ -283,14 +318,16 @@ export default function AdminConfigsPage() {
   };
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">系统配置</h1>
-        <p className="text-muted-foreground">管理平台 .env 配置项，保存后部分配置需要重启服务生效</p>
+    <div className="page-shell max-w-6xl">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">系统配置</h1>
+          <p className="page-subtitle">管理平台基础能力、AI 提示词和自动跟进策略，保存后部分配置需要重启服务生效。</p>
+        </div>
       </div>
 
       <Tabs defaultValue="basic" className="space-y-6">
-        <TabsList>
+        <TabsList className="rounded-2xl border border-slate-200/80 bg-white p-1 shadow-sm">
           <TabsTrigger value="basic">基础配置</TabsTrigger>
           <TabsTrigger value="prompts">
             <Sparkles className="h-4 w-4 mr-2" />
@@ -300,7 +337,7 @@ export default function AdminConfigsPage() {
 
         <TabsContent value="basic" className="space-y-6">
           {CONFIG_SECTIONS.map((section) => (
-        <Card key={section.title}>
+        <Card key={section.title} className="section-card">
           <CardHeader>
             <CardTitle>{section.title}</CardTitle>
             <CardDescription>{section.description}</CardDescription>
@@ -352,9 +389,9 @@ export default function AdminConfigsPage() {
             ))}
 
             {section.routing && (
-              <div className="border-t pt-4 space-y-3">
+              <div className="space-y-3 border-t border-slate-200/80 pt-4">
                 <Label className="text-sm font-medium">启用邮箱查找服务</Label>
-                <div className="flex gap-6">
+                <div className="flex flex-wrap gap-6">
                   {section.routing.map((r) => {
                     const isConfigured = !!getValue(r.dependsOn);
                     return (
@@ -383,14 +420,16 @@ export default function AdminConfigsPage() {
         </Card>
       ))}
 
-          <Button onClick={handleSave} disabled={saving} size="lg">
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saving} size="lg">
             {saving ? "保存中..." : "保存所有配置"}
-          </Button>
+            </Button>
+          </div>
         </TabsContent>
 
         {/* AI Prompt 配置 Tab */}
         <TabsContent value="prompts" className="space-y-6">
-          <Card>
+          <Card className="section-card">
             <CardHeader>
               <CardTitle>{AI_PROMPT_SECTION.title}</CardTitle>
               <CardDescription>{AI_PROMPT_SECTION.description}</CardDescription>
@@ -414,7 +453,7 @@ export default function AdminConfigsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="section-card">
             <CardHeader>
               <CardTitle>{SCORING_WEIGHT_SECTION.title}</CardTitle>
               <CardDescription>{SCORING_WEIGHT_SECTION.description}</CardDescription>
@@ -441,7 +480,35 @@ export default function AdminConfigsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4">
+          <Card className="section-card">
+            <CardHeader>
+              <CardTitle>{FOLLOWUP_SETTING_SECTION.title}</CardTitle>
+              <CardDescription>{FOLLOWUP_SETTING_SECTION.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {FOLLOWUP_SETTING_SECTION.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Input
+                    id={field.key}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={getValue(field.key)}
+                    readOnly={field.readonly}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                  />
+                </div>
+              ))}
+              <p className="text-sm text-muted-foreground">
+                最后一轮邮件发出后超过该天数仍未回复，系统会停止继续跟进，并在全部客户都结束后自动完成活动。
+              </p>
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-end gap-4">
             <Button onClick={handleSave} disabled={saving} size="lg">
               {saving ? "保存中..." : "保存提示词"}
             </Button>

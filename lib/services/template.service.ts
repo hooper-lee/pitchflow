@@ -1,13 +1,28 @@
 import { db } from "@/lib/db";
 import { emailTemplates } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
 
-export async function listTemplates(tenantId: string) {
-  return db
+export async function listTemplates(tenantId: string, page = 1, limit = 12) {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(emailTemplates)
+    .where(eq(emailTemplates.tenantId, tenantId));
+
+  const items = await db
     .select()
     .from(emailTemplates)
     .where(eq(emailTemplates.tenantId, tenantId))
-    .orderBy(desc(emailTemplates.createdAt));
+    .orderBy(desc(emailTemplates.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  return {
+    items,
+    total: Number(total),
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(Number(total) / limit)),
+  };
 }
 
 export async function getTemplate(id: string, tenantId: string) {
@@ -31,7 +46,6 @@ export async function createTemplate(
     angle?: string;
     productName?: string;
     senderName?: string;
-    senderEmail?: string;
     attachments?: { filename: string; url: string; size?: number }[];
     isDefault?: boolean;
   }

@@ -33,14 +33,14 @@ export function RecentCampaigns() {
     fetch("/api/v1/campaigns?limit=5")
       .then((res) => res.json())
       .then((data) => {
-        setCampaigns(data.data || []);
+        setCampaigns(data.data?.items || data.data || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">最近活动</CardTitle>
         <Link href="/campaigns">
@@ -67,12 +67,12 @@ export function RecentCampaigns() {
               return (
                 <div
                   key={campaign.id}
-                  className="flex items-center justify-between py-2"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3"
                 >
                   <div className="space-y-1">
                     <Link
                       href={`/campaigns/${campaign.id}`}
-                      className="text-sm font-medium hover:underline"
+                      className="text-sm font-medium text-slate-900 hover:underline"
                     >
                       {campaign.name}
                     </Link>

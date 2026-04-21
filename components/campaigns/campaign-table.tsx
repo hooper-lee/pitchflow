@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Pause, Play } from "lucide-react";
+import { Eye, Pause, Play, Sparkles, Users, Send, Reply } from "lucide-react";
 
 interface Campaign {
   id: string;
@@ -45,7 +45,7 @@ export function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
   };
 
   return (
-    <div className="rounded-md border">
+    <div className="overflow-x-auto rounded-[28px] border border-slate-200/80 bg-white shadow-sm">
       <Table>
         <TableHeader>
           <TableRow>
@@ -64,23 +64,48 @@ export function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
           {campaigns.map((campaign) => {
             const status = statusMap[campaign.status] || statusMap.draft;
             return (
-              <TableRow key={campaign.id}>
-                <TableCell className="font-medium">
+              <TableRow key={campaign.id} className="border-slate-100">
+                <TableCell>
                   <Link
                     href={`/campaigns/${campaign.id}`}
-                    className="hover:underline"
+                    className="block rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 transition-colors hover:bg-slate-100/70"
                   >
-                    {campaign.name}
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900">{campaign.name}</div>
+                        <div className="mt-1 text-sm text-slate-500">
+                          {campaign.industry || "未填写行业"}
+                        </div>
+                      </div>
+                    </div>
                   </Link>
                 </TableCell>
                 <TableCell>{campaign.industry || "—"}</TableCell>
                 <TableCell>
                   <Badge variant={status.variant}>{status.label}</Badge>
                 </TableCell>
-                <TableCell>{campaign.totalProspects || 0}</TableCell>
-                <TableCell>{campaign.sentCount || 0}</TableCell>
+                <TableCell>
+                  <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">
+                    <Users className="h-3.5 w-3.5" />
+                    {campaign.totalProspects || 0}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">
+                    <Send className="h-3.5 w-3.5" />
+                    {campaign.sentCount || 0}
+                  </div>
+                </TableCell>
                 <TableCell>{campaign.openedCount || 0}</TableCell>
-                <TableCell>{campaign.repliedCount || 0}</TableCell>
+                <TableCell>
+                  <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2 text-sm text-slate-700">
+                    <Reply className="h-3.5 w-3.5" />
+                    {campaign.repliedCount || 0}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(campaign.createdAt).toLocaleDateString("zh-CN")}
                 </TableCell>

@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Eye, Trash2, Sparkles } from "lucide-react";
+import { MoreHorizontal, Eye, Trash2, Sparkles, Building2, Mail, MapPin } from "lucide-react";
 
 interface Prospect {
   id: string;
@@ -116,7 +116,7 @@ export function ProspectTable({
   };
 
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="overflow-x-auto rounded-[28px] border border-slate-200/80 bg-white shadow-sm">
       <Table>
         <TableHeader>
           <TableRow>
@@ -133,36 +133,51 @@ export function ProspectTable({
         </TableHeader>
         <TableBody>
           {prospects.map((prospect) => (
-            <TableRow key={prospect.id}>
+            <TableRow key={prospect.id} className="border-slate-100">
               <TableCell className="align-top">
-                <div className="min-w-0 space-y-1">
-                  <div className="font-medium truncate">
-                    {prospect.companyName || "—"}
-                  </div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {prospect.contactName || "未填写联系人"}
-                  </div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {prospect.email || "未填写邮箱"}
+                <div className="min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="truncate font-semibold text-slate-900">
+                        {prospect.companyName || "—"}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>{prospect.contactName || "未填写联系人"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <Mail className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{prospect.email || "未填写邮箱"}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </TableCell>
-              <TableCell>{prospect.country || "—"}</TableCell>
+              <TableCell>
+                <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {prospect.country || "—"}
+                </div>
+              </TableCell>
               <TableCell className="text-center">
                 {prospect.companyScore !== null && prospect.companyScore !== undefined ? (
-                  <span
-                    className={
-                      prospect.companyScore >= 75
-                        ? "text-green-600 font-medium"
-                        : prospect.companyScore >= 50
-                        ? "text-yellow-600 font-medium"
-                        : prospect.companyScore >= 25
-                        ? "text-orange-500 font-medium"
-                        : "text-gray-400"
-                    }
-                  >
-                    {prospect.companyScore}
-                  </span>
+                  <div className="inline-flex min-w-[64px] justify-center rounded-xl border border-slate-200/80 bg-white px-3 py-2">
+                    <span
+                      className={
+                        prospect.companyScore >= 75
+                          ? "font-semibold text-green-600"
+                          : prospect.companyScore >= 50
+                            ? "font-semibold text-yellow-600"
+                            : prospect.companyScore >= 25
+                              ? "font-semibold text-orange-500"
+                              : "font-semibold text-gray-400"
+                      }
+                    >
+                      {prospect.companyScore}
+                    </span>
+                  </div>
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
@@ -178,19 +193,21 @@ export function ProspectTable({
               </TableCell>
               <TableCell className="text-center">
                 {prospect.overallScore !== null && prospect.overallScore !== undefined ? (
-                  <span
-                    className={
-                      prospect.overallScore >= 75
-                        ? "text-green-600 font-medium"
-                        : prospect.overallScore >= 50
-                        ? "text-yellow-600 font-medium"
-                        : prospect.overallScore >= 25
-                        ? "text-orange-500 font-medium"
-                        : "text-gray-400"
-                    }
-                  >
-                    {prospect.overallScore}
-                  </span>
+                  <div className="inline-flex min-w-[64px] justify-center rounded-xl border border-slate-200/80 bg-white px-3 py-2">
+                    <span
+                      className={
+                        prospect.overallScore >= 75
+                          ? "font-semibold text-green-600"
+                          : prospect.overallScore >= 50
+                            ? "font-semibold text-yellow-600"
+                            : prospect.overallScore >= 25
+                              ? "font-semibold text-orange-500"
+                              : "font-semibold text-gray-400"
+                      }
+                    >
+                      {prospect.overallScore}
+                    </span>
+                  </div>
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
@@ -223,8 +240,8 @@ export function ProspectTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
-                <div className="max-w-[180px] truncate">
-                {prospect.recommendedAction || "—"}
+                <div className="max-w-[200px] rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2 leading-5 text-slate-600">
+                  {prospect.recommendedAction || "—"}
                 </div>
               </TableCell>
               <TableCell>

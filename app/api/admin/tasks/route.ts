@@ -47,30 +47,10 @@ export async function GET() {
     }
 
     // Alert stats
-    const [todayHighIntent] = await db
-      .select({ count: count() })
-      .from(emails)
-      .where(gte(emails.highIntentAlertedAt, today));
-
-    const [todayClicked] = await db
-      .select({ count: count() })
-      .from(emails)
-      .where(gte(emails.clickAlertedAt, today));
-
     const [todayReplied] = await db
       .select({ count: count() })
       .from(emails)
       .where(gte(emails.replyAlertedAt, today));
-
-    const [weekHighIntent] = await db
-      .select({ count: count() })
-      .from(emails)
-      .where(gte(emails.highIntentAlertedAt, weekAgo));
-
-    const [weekClicked] = await db
-      .select({ count: count() })
-      .from(emails)
-      .where(gte(emails.clickAlertedAt, weekAgo));
 
     const [weekReplied] = await db
       .select({ count: count() })
@@ -100,15 +80,11 @@ export async function GET() {
         pendingCount: pendingFollowupCount,
         cronSchedule: "*/15 * * * *",
       },
-      alerts: {
+      tracking: {
         today: {
-          highIntent: Number(todayHighIntent?.count || 0),
-          clicked: Number(todayClicked?.count || 0),
           replied: Number(todayReplied?.count || 0),
         },
         thisWeek: {
-          highIntent: Number(weekHighIntent?.count || 0),
-          clicked: Number(weekClicked?.count || 0),
           replied: Number(weekReplied?.count || 0),
         },
       },

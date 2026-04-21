@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SearchInput } from "@/components/shared/search-input";
+import { ListPagination } from "@/components/shared/list-pagination";
 import { ProspectTable } from "@/components/prospects/prospect-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 
 type ProspectItem = Awaited<ReturnType<typeof fetch>> extends never ? never : {
   id: string;
@@ -91,11 +92,11 @@ export default function ProspectsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">客户管理</h1>
-          <p className="text-muted-foreground">
+          <h1 className="page-title">客户管理</h1>
+          <p className="page-subtitle">
             管理你的潜在客户线索
           </p>
         </div>
@@ -107,7 +108,7 @@ export default function ProspectsPage() {
         </Link>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-[24px] border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
         <div className="w-72">
           <SearchInput
             value={search}
@@ -168,31 +169,15 @@ export default function ProspectsPage() {
           ) : (
             <>
               <ProspectTable prospects={prospects} onRefresh={fetchProspects} />
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-6">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    上一页
-                  </Button>
-                  <span className="text-sm text-muted-foreground px-3">
-                    第 {page} / {totalPages} 页
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    下一页
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              )}
+              <div className="pt-2">
+                <ListPagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  itemLabel="条客户"
+                  onPageChange={setPage}
+                />
+              </div>
             </>
           )}
         </TabsContent>

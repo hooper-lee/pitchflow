@@ -36,6 +36,26 @@ export const createCampaignSchema = z.object({
   }).optional(),
 });
 
+export const createMailAccountSchema = z.object({
+  name: z.string().min(1).max(255),
+  email: z.string().email(),
+  imap: z.object({
+    host: z.string().min(1),
+    port: z.number().int().min(1).max(65535),
+    secure: z.boolean(),
+    username: z.string().min(1),
+    password: z.string().min(1),
+  }),
+  smtp: z.object({
+    host: z.string().min(1),
+    port: z.number().int().min(1).max(65535),
+    secure: z.boolean(),
+    username: z.string().min(1),
+    password: z.string().min(1),
+  }),
+  isDefault: z.boolean().optional(),
+});
+
 export const createTemplateSchema = z.object({
   name: z.string().min(1).max(255),
   subject: z.string().min(1).max(500),
@@ -43,7 +63,6 @@ export const createTemplateSchema = z.object({
   angle: z.string().max(100).optional(),
   productName: z.string().max(255).optional(),
   senderName: z.string().max(255).optional(),
-  senderEmail: z.string().email().max(255).optional(),
   attachments: z.array(z.object({
     filename: z.string(),
     url: z.string().url(),
@@ -63,5 +82,6 @@ export const paginationSchema = z.object({
 export type CreateProspectInput = z.infer<typeof createProspectSchema>;
 export type DiscoverProspectsInput = z.infer<typeof discoverProspectsSchema>;
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
+export type CreateMailAccountInput = z.infer<typeof createMailAccountSchema>;
 export type CreateTemplateInput = z.infer<typeof createTemplateSchema>;
 export type PaginationInput = z.infer<typeof paginationSchema>;

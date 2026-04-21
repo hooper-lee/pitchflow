@@ -9,8 +9,9 @@ import { logAuditEvent } from "@/lib/services/audit.service";
 export async function GET(request: NextRequest) {
   try {
     const { tenantId } = await requireTenant();
+    const page = parseInt(request.nextUrl.searchParams.get("page") || "1");
     const limit = parseInt(request.nextUrl.searchParams.get("limit") || "20");
-    const result = await listCampaigns(tenantId, limit);
+    const result = await listCampaigns(tenantId, page, limit);
     return apiResponse(result);
   } catch (error) {
     return handleApiError(error);

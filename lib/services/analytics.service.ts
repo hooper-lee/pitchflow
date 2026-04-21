@@ -30,15 +30,10 @@ export async function getDashboardStats(tenantId: string) {
       )
     );
 
-  const [activeCampaigns] = await db
+  const [totalCampaigns] = await db
     .select({ count: count() })
     .from(campaigns)
-    .where(
-      and(
-        eq(campaigns.tenantId, tenantId),
-        eq(campaigns.status, "active")
-      )
-    );
+    .where(eq(campaigns.tenantId, tenantId));
 
   const sentCount = Number(emailsSent?.count || 0);
   const openedCount = Number(emailsOpened?.count || 0);
@@ -48,7 +43,7 @@ export async function getDashboardStats(tenantId: string) {
     totalProspects: Number(totalProspects?.count || 0),
     emailsSent: sentCount,
     openRate,
-    activeCampaigns: Number(activeCampaigns?.count || 0),
+    activeCampaigns: Number(totalCampaigns?.count || 0),
   };
 }
 

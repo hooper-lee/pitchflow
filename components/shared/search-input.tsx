@@ -17,7 +17,7 @@ export function SearchInput({ value, onChange, placeholder = "搜索..." }: Sear
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-9"
+        className="rounded-2xl bg-white pl-9 shadow-sm"
       />
     </div>
   );
