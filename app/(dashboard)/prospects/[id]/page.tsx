@@ -383,27 +383,27 @@ export default function ProspectDetailPage() {
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-[28px] border-slate-200/80 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-white/95 pb-5">
-              <CardTitle className="text-xl text-slate-950">Basic Information</CardTitle>
+              <CardTitle className="text-xl text-slate-950">基础信息</CardTitle>
             </CardHeader>
             <CardContent className="bg-gradient-to-br from-white via-slate-50/40 to-white p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <DetailField
-                  label="Company Name"
+                  label="公司名称"
                   icon={<Building2 className="h-4 w-4" />}
                   value={prospect.companyName || "—"}
                 />
                 <DetailField
-                  label="Primary Contact"
+                  label="主要联系人"
                   icon={<Users className="h-4 w-4" />}
                   value={prospect.contactName || "—"}
                 />
                 <DetailField
-                  label="Corporate Email"
+                  label="企业邮箱"
                   icon={<Mail className="h-4 w-4" />}
                   value={prospect.email || "—"}
                 />
                 <DetailField
-                  label="Official Website"
+                  label="官网链接"
                   icon={<Globe className="h-4 w-4" />}
                   value={
                     prospect.website ? (
@@ -421,18 +421,18 @@ export default function ProspectDetailPage() {
                   }
                 />
                 <DetailField
-                  label="Headquarters"
+                  label="所在国家"
                   icon={<MapPin className="h-4 w-4" />}
                   value={prospect.country || "—"}
                 />
-                <DetailField label="Industry Vertical" value={prospect.industry || "—"} />
+                <DetailField label="所属行业" value={prospect.industry || "—"} />
               </div>
             </CardContent>
           </Card>
 
           <Card className="overflow-hidden rounded-[28px] border-slate-200/80 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-blue-50/80 via-slate-50 to-white pb-5">
-              <CardTitle className="text-xl text-slate-950">AI Research Summary</CardTitle>
+              <CardTitle className="text-xl text-slate-950">AI 调研摘要</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 p-6">
               {hasResearch && research ? (
@@ -444,10 +444,10 @@ export default function ProspectDetailPage() {
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-3">
-                    <DetailField label="Scale" compact value={research.employeeCount || "未知"} />
-                    <DetailField label="Company Type" compact value={research.companyType || "未知"} />
+                    <DetailField label="公司规模" compact value={research.employeeCount || "未知"} />
+                    <DetailField label="公司类型" compact value={research.companyType || "未知"} />
                     <DetailField
-                      label="Research Status"
+                      label="调研状态"
                       compact
                       value={researchStatusLabels[research.status] || research.status}
                     />
@@ -456,7 +456,7 @@ export default function ProspectDetailPage() {
                   {research.companyDescription && (
                     <div className="rounded-2xl border border-slate-200/80 bg-white p-5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Company Description
+                        公司描述
                       </p>
                       <p className="mt-3 text-sm leading-7 text-slate-700">
                         {research.companyDescription}
@@ -467,7 +467,7 @@ export default function ProspectDetailPage() {
                   {research.mainProducts && research.mainProducts.length > 0 && (
                     <div className="rounded-2xl border border-slate-200/80 bg-white p-5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Main Products
+                        主要产品
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         {research.mainProducts.map((product, index) => (
@@ -486,7 +486,7 @@ export default function ProspectDetailPage() {
                   {research.targetMarkets && research.targetMarkets.length > 0 && (
                     <div className="rounded-2xl border border-slate-200/80 bg-white p-5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Target Markets
+                        目标市场
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         {research.targetMarkets.map((market, index) => (
@@ -505,7 +505,7 @@ export default function ProspectDetailPage() {
                   {research.decisionMakers && research.decisionMakers.length > 0 && (
                     <div className="rounded-2xl border border-slate-200/80 bg-white p-5">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Decision Makers
+                        关键决策人
                       </p>
                       <div className="mt-4 grid gap-3 md:grid-cols-2">
                         {research.decisionMakers.map((decisionMaker, index) => (
@@ -559,7 +559,7 @@ export default function ProspectDetailPage() {
           {prospect.contacts && prospect.contacts.length > 0 && (
             <Card className="overflow-hidden rounded-[28px] border-slate-200/80 shadow-sm">
               <CardHeader className="border-b border-slate-100 bg-white/95 pb-5">
-                <CardTitle className="text-xl text-slate-950">Identified Contacts</CardTitle>
+                <CardTitle className="text-xl text-slate-950">已识别联系人</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="grid gap-4 md:grid-cols-2">

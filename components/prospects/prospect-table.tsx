@@ -135,7 +135,10 @@ export function ProspectTable({
           {prospects.map((prospect) => (
             <TableRow key={prospect.id} className="border-slate-100">
               <TableCell className="align-top">
-                <div className="min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
+                <Link
+                  href={`/prospects/${prospect.id}`}
+                  className="block min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 transition-colors hover:border-slate-300 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm">
                       <Building2 className="h-4 w-4" />
@@ -153,7 +156,7 @@ export function ProspectTable({
                       </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               </TableCell>
               <TableCell>
                 <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">

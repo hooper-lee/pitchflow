@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireTenant } from "@/lib/auth";
 import { getAIProviderWithConfig, buildOutreachPrompt, buildFollowupPrompt } from "@/lib/ai";
+import { parseJsonWithRepair } from "@/lib/ai/json-utils";
 import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
 import { getDefaultResearchProvider } from "@/lib/services/config.service";
 
@@ -23,6 +24,58 @@ function asString(value: unknown, fallback = "") {
 
 function asOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function stripThinkBlocks(text: string) {
+  return text.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, "").trim();
+}
+
+function stripCodeFences(text: string) {
+  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+}
+
+function sanitizeEmailText(text: string) {
+  return stripCodeFences(stripThinkBlocks(text));
+}
+
+function extractPlainEmail(text: string): GeneratedEmail {
+  const cleanedText = sanitizeEmailText(text);
+  const lines = cleanedText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const subjectLine = lines.find((line) =>
+    line.toLowerCase().startsWith("subject:")
+  );
+  const subject = subjectLine?.replace(/^subject:\s*/i, "").trim() || "Quick question";
+  const body = lines
+    .filter((line) => !line.toLowerCase().startsWith("subject:"))
+    .join("\n")
+    .trim();
+
+  return { subject, body };
+}
+
+function normalizeGeneratedEmail(value: unknown): GeneratedEmail {
+  if (typeof value === "string") {
+    try {
+      return normalizeGeneratedEmail(parseJsonWithRepair<GeneratedEmail>(sanitizeEmailText(value)));
+    } catch {
+      return extractPlainEmail(value);
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const subject = sanitizeEmailText(asString((value as GeneratedEmail).subject)).trim();
+    const body = sanitizeEmailText(asString((value as GeneratedEmail).body)).trim();
+
+    return {
+      subject: subject || "Quick question",
+      body,
+    };
+  }
+
+  return { subject: "Quick question", body: "" };
 }
 
 function buildPrompt(body: Record<string, unknown>) {
@@ -87,7 +140,8 @@ async function resolveAI(body: Record<string, unknown>) {
 async function generateEmailResult(body: Record<string, unknown>) {
   const ai = await resolveAI(body);
   const prompt = buildPrompt(body);
-  return ai.generateEmail({ prompt });
+  const result = await ai.generateEmail({ prompt });
+  return normalizeGeneratedEmail(result);
 }
 
 function streamTextValue(
