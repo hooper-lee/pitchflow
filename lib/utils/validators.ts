@@ -76,6 +76,7 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
+  researchStatus: z.enum(["pending", "processing", "completed", "failed"]).optional(),
   leadGrade: z.enum(["A", "B", "C", "D"]).optional(),
 });
 

@@ -50,6 +50,7 @@ export default function ProspectsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [researchStatusFilter, setResearchStatusFilter] = useState("all");
   const [leadGradeFilter, setLeadGradeFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -61,6 +62,9 @@ export default function ProspectsPage() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
+      if (researchStatusFilter !== "all") {
+        params.set("researchStatus", researchStatusFilter);
+      }
       if (leadGradeFilter !== "all") params.set("leadGrade", leadGradeFilter);
       params.set("page", String(page));
 
@@ -74,7 +78,7 @@ export default function ProspectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, leadGradeFilter, page]);
+  }, [search, statusFilter, researchStatusFilter, leadGradeFilter, page]);
 
   useEffect(() => {
     fetchProspects();
@@ -118,6 +122,26 @@ export default function ProspectsPage() {
         </div>
         <div className="w-40">
           <Select
+            value={researchStatusFilter}
+            onValueChange={(value) => {
+              setResearchStatusFilter(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="调研状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部调研状态</SelectItem>
+              <SelectItem value="pending">待调研</SelectItem>
+              <SelectItem value="processing">调研中</SelectItem>
+              <SelectItem value="completed">已完成</SelectItem>
+              <SelectItem value="failed">调研失败</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-40">
+          <Select
             value={leadGradeFilter}
             onValueChange={(value) => {
               setLeadGradeFilter(value);
@@ -147,7 +171,6 @@ export default function ProspectsPage() {
         <TabsList>
           <TabsTrigger value="all">全部</TabsTrigger>
           <TabsTrigger value="new">新线索</TabsTrigger>
-          <TabsTrigger value="research">调研</TabsTrigger>
           <TabsTrigger value="contacted">已联系</TabsTrigger>
           <TabsTrigger value="replied">已回复</TabsTrigger>
           <TabsTrigger value="converted">已转化</TabsTrigger>

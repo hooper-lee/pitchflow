@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { prospects, systemConfigs, prospectResearch, prospectScores } from "@/lib/db/schema";
-import { eq, and, ilike, desc, count, or, sql } from "drizzle-orm";
+import { eq, and, ilike, desc, count, or, isNull, sql } from "drizzle-orm";
 import { discoverEmails as hunterDiscover, type HunterEmailResult } from "@/lib/integrations/hunter";
 import { discoverEmails as snovDiscover, type SnovEmailResult } from "@/lib/integrations/snovio";
 import { inferEmailPattern } from "@/lib/utils/email-patterns";
@@ -52,6 +52,7 @@ interface ListProspectsParams {
   limit?: number;
   search?: string;
   status?: string;
+  researchStatus?: "pending" | "processing" | "completed" | "failed";
   leadGrade?: "A" | "B" | "C" | "D";
 }
 
@@ -83,6 +84,7 @@ export async function listProspects({
   limit = 20,
   search,
   status,
+  researchStatus,
   leadGrade,
 }: ListProspectsParams) {
   const conditions = [eq(prospects.tenantId, tenantId)];
@@ -98,15 +100,19 @@ export async function listProspects({
   }
 
   if (status) {
-    if (status === "research") {
+    conditions.push(eq(prospects.status, status as NormalizedProspectStatus));
+  }
+
+  if (researchStatus) {
+    if (researchStatus === "pending") {
       conditions.push(
         or(
-          eq(prospectResearch.status, "processing"),
-          eq(prospectResearch.status, "completed")
+          isNull(prospectResearch.status),
+          eq(prospectResearch.status, "pending")
         )!
       );
     } else {
-      conditions.push(eq(prospects.status, status as NormalizedProspectStatus));
+      conditions.push(eq(prospectResearch.status, researchStatus));
     }
   }
 
@@ -160,6 +166,7 @@ export async function listProspects({
   const [{ total }] = await db
     .select({ total: count() })
     .from(prospects)
+    .leftJoin(prospectResearch, eq(prospects.id, prospectResearch.prospectId))
     .leftJoin(prospectScores, eq(prospects.id, prospectScores.prospectId))
     .where(where);
 
