@@ -7,6 +7,7 @@ import { users, tenants } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID!,

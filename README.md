@@ -64,6 +64,7 @@ cp .env.example .env.local
 ```env
 DATABASE_URL=postgresql://user:pass@localhost:5432/pitchflow
 NEXTAUTH_URL=http://localhost:3000
+AUTH_TRUST_HOST=true
 NEXTAUTH_SECRET=your-secret-here
 ```
 
@@ -110,6 +111,90 @@ npm run dev
 ```
 
 访问 [http://localhost:3000](http://localhost:3000)
+
+## AWS Docker 部署
+
+适用于没有域名、直接通过服务器 IP 首次部署：
+
+### 1. 服务器准备
+
+- Ubuntu 22.04
+- 已开放端口：`22 / 3000 / 3001 / 8888`
+- 安装 Docker 与 Docker Compose Plugin
+
+### 2. 克隆代码并准备生产环境变量
+
+```bash
+git clone https://github.com/hooper-lee/pitchflow.git
+cd pitchflow
+cp .env.production.example .env.production
+```
+
+至少需要确认这些值：
+
+- `NEXTAUTH_URL`
+- `AUTH_TRUST_HOST=true`
+- `NEXT_PUBLIC_APP_URL`
+- `NEXTAUTH_SECRET`
+- `CRON_SECRET`
+- `EMAILENGINE_WEBHOOK_BASE_URL`
+- `EMAILENGINE_INTERNAL_SECRET`
+- `EMAILENGINE_ACCESS_TOKEN`
+- `EMAILENGINE_PREPARED_TOKEN`
+- `CUSTOM_AI_BASE_URL`
+- `CUSTOM_AI_API_KEY`
+- `CUSTOM_AI_MODEL`
+
+### 3. 启动整套服务
+
+首次生成 EmailEngine token：
+
+```bash
+docker run -d --name pitchflow-redis-bootstrap redis:7
+docker run --rm --network host \
+  -e EENGINE_REDIS=redis://127.0.0.1:6379/2 \
+  postalsys/emailengine:v2 \
+  emailengine tokens issue --scope api
+```
+
+把输出的明文 token 填进 `EMAILENGINE_ACCESS_TOKEN`，再执行：
+
+```bash
+docker run --rm --network host \
+  -e EENGINE_REDIS=redis://127.0.0.1:6379/2 \
+  postalsys/emailengine:v2 \
+  emailengine tokens export --scope api
+```
+
+把输出内容填进 `EMAILENGINE_PREPARED_TOKEN`。
+
+然后正常启动：
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+默认会启动：
+
+- Next.js 应用：`3000`
+- EmailEngine：`3001`
+- SearXNG：`8888`
+- PostgreSQL
+- Redis
+- Queue workers
+
+### 4. 首次部署后检查
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f app
+docker compose -f docker-compose.prod.yml logs -f workers
+```
+
+访问：
+
+- 主应用：`http://YOUR_SERVER_IP:3000`
+- EmailEngine：`http://YOUR_SERVER_IP:3001`
 
 ### 7. 创建管理员账号
 

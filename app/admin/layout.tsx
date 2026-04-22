@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -26,6 +29,12 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  if (pathname === "/admin/login") {
+    return <div className="min-h-screen bg-slate-50/70">{children}</div>;
+  }
+
   return (
     <div className="min-h-screen flex bg-slate-50/70">
       <aside className="w-64 border-r border-slate-200/80 bg-white flex flex-col">

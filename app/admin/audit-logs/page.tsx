@@ -10,6 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+export const dynamic = "force-dynamic";
+
 function formatDetailSummary(detail: Record<string, unknown> | null) {
   if (!detail) return "—";
 

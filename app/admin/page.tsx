@@ -4,6 +4,8 @@ import { count } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Building2, Send, Target } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDashboardPage() {
   const [totalUsers] = await db.select({ count: count() }).from(users);
   const [totalTenants] = await db.select({ count: count() }).from(tenants);

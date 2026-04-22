@@ -1,0 +1,86 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      emailengine:
+        condition: service_started
+      searxng:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    command: sh -lc "npm run db:push && npm run start"
+
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      emailengine:
+        condition: service_started
+      searxng:
+        condition: service_started
+    command: npm run start:workers
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pitchflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pitchflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  emailengine:
+    image: postalsys/emailengine:v2
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      EENGINE_REDIS: redis://redis:6379/2
+      EENGINE_SECRET: ${EMAILENGINE_INTERNAL_SECRET}
+      EENGINE_PREPARED_TOKEN: ${EMAILENGINE_PREPARED_TOKEN}
+    depends_on:
+      redis:
+        condition: service_started
+    ports:
+      - "3001:3000"
+
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    ports:
+      - "8888:8080"
+
+volumes:
+  postgres_data:
+  redis_data:
