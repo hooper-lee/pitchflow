@@ -23,6 +23,58 @@ export interface ResearchResult {
   basicInfo?: string;
 }
 
+interface ProspectIcpMetadata {
+  icpProfileId?: string | null;
+  discoveryFinalScore?: number | null;
+  finalScore?: number | null;
+  ruleScore?: number | null;
+  aiScore?: number | null;
+  feedbackScore?: number | null;
+  matchedRules?: string[];
+  rejectReasons?: string[];
+  icpProfile?: {
+    name?: string | null;
+    targetCustomerText?: string | null;
+    mustHave?: string[];
+    mustNotHave?: string[];
+    positiveKeywords?: string[];
+    negativeKeywords?: string[];
+    productCategories?: string[];
+    salesModel?: string | null;
+    promptTemplate?: string | null;
+  } | null;
+}
+
+function formatList(values?: string[]) {
+  return values?.filter(Boolean).join(", ") || "N/A";
+}
+
+function buildIcpScoringContext(metadata: Record<string, unknown> | null | undefined) {
+  const icpMetadata = metadata as ProspectIcpMetadata | null | undefined;
+  if (!icpMetadata?.icpProfileId && !icpMetadata?.icpProfile) {
+    return "N/A";
+  }
+
+  const profile = icpMetadata.icpProfile || {};
+  return [
+    `ICP Profile: ${profile.name || icpMetadata.icpProfileId || "N/A"}`,
+    `Target Customer: ${profile.targetCustomerText || "N/A"}`,
+    `Must Have: ${formatList(profile.mustHave)}`,
+    `Must Not Have: ${formatList(profile.mustNotHave)}`,
+    `Positive Keywords: ${formatList(profile.positiveKeywords)}`,
+    `Negative Keywords: ${formatList(profile.negativeKeywords)}`,
+    `Product Categories: ${formatList(profile.productCategories)}`,
+    `Sales Model: ${profile.salesModel || "N/A"}`,
+    `Discovery Final Score: ${icpMetadata.discoveryFinalScore ?? icpMetadata.finalScore ?? "N/A"}`,
+    `Rule Score: ${icpMetadata.ruleScore ?? "N/A"}`,
+    `AI Score: ${icpMetadata.aiScore ?? "N/A"}`,
+    `Feedback Score: ${icpMetadata.feedbackScore ?? "N/A"}`,
+    `Matched Rules: ${formatList(icpMetadata.matchedRules)}`,
+    `Rejected Signals: ${formatList(icpMetadata.rejectReasons)}`,
+    `Extra ICP Instructions: ${profile.promptTemplate || "N/A"}`,
+  ].join("\n");
+}
+
 export async function researchProspect(
   prospectId: string,
   tenantId: string,
@@ -616,6 +668,7 @@ export async function scoreProspect(
     industry: prospect.industry,
     country: prospect.country,
     website: prospect.website,
+    icpContext: buildIcpScoringContext(prospect.metadata),
     research: {
       aiSummary: research.aiSummary,
       companyDescription: research.companyDescription,
@@ -664,6 +717,7 @@ export async function scoreProspect(
         (scoringInput.research.decisionMakers || [])
           .map((d) => `${d.name} (${d.position})`)
           .join(", ") || "N/A",
+      icpContext: scoringInput.icpContext,
     });
 
     if (resolvedProvider === "openai") {

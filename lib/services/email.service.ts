@@ -3,6 +3,7 @@ import { emails, prospects, emailTemplates } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { emailSendQueue } from "@/lib/queue";
 import { getAIProviderWithConfig, buildOutreachPrompt } from "@/lib/ai";
+import { getProductProfile } from "@/lib/services/product-profile.service";
 
 export async function composeEmail(
   prospectId: string,
@@ -36,14 +37,18 @@ export async function composeEmail(
 
   // Use AI to generate personalized email
   const ai = getAIProviderWithConfig(aiProvider);
+  const productProfile = await getProductProfile(tenantId);
   const prompt = buildOutreachPrompt({
     prospectName: prospect.contactName || "there",
     companyName: prospect.companyName || "your company",
     industry: prospect.industry || "your industry",
     country: prospect.country || "",
     researchSummary: prospect.researchSummary || undefined,
-    productName: "our products and services",
-    senderName: "Our Team",
+    productName: template?.productName || productProfile.productName,
+    productDescription: productProfile.productDescription || undefined,
+    valueProposition: productProfile.valueProposition || undefined,
+    senderName: template?.senderName || productProfile.senderName,
+    senderTitle: productProfile.senderTitle || undefined,
     angle: template?.angle || undefined,
     templateBody: template?.body || undefined,
   });

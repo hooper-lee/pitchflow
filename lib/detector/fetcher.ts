@@ -15,6 +15,33 @@ export interface FetchResult {
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+const CHALLENGE_PATTERNS = [
+  "checking your browser before accessing",
+  "verify you are human",
+  "cf-browser-verification",
+  "cf-challenge",
+  "cf-turnstile",
+  "cloudflare ray id",
+  "just a moment",
+  "attention required",
+  "enable javascript and cookies to continue",
+];
+
+function detectChallengePage(html: string) {
+  const normalizedHtml = html.toLowerCase();
+  return CHALLENGE_PATTERNS.some((pattern) => normalizedHtml.includes(pattern));
+}
+
+function buildFetchResult(input: Omit<FetchResult, "error"> & { error?: string }) {
+  if (input.html && detectChallengePage(input.html)) {
+    return {
+      ...input,
+      error: "cloudflare_challenge_page",
+    };
+  }
+  return input;
+}
+
 export async function fetchWithCheerio(url: string): Promise<FetchResult> {
   const start = Date.now();
   try {
@@ -31,14 +58,14 @@ export async function fetchWithCheerio(url: string): Promise<FetchResult> {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    return {
+    return buildFetchResult({
       html,
       $,
       finalUrl: res.url || url,
       httpStatus: res.status,
       durationMs: Date.now() - start,
       method: "cheerio",
-    };
+    });
   } catch (err) {
     return {
       html: "",
@@ -67,14 +94,14 @@ async function fetchWithPlaywright(url: string): Promise<FetchResult> {
     await browser.close();
 
     const $ = cheerio.load(html);
-    return {
+    return buildFetchResult({
       html,
       $,
       finalUrl,
       httpStatus: 200,
       durationMs: Date.now() - start,
       method: "playwright",
-    };
+    });
   } catch (err) {
     return {
       html: "",

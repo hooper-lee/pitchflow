@@ -11,6 +11,7 @@ import {
 import { submitEmailEngineMessage } from "@/lib/integrations/emailengine";
 import { getFollowupSettings } from "@/lib/services/config.service";
 import { getMailAccountById } from "@/lib/services/mail-account.service";
+import { getProductProfile } from "@/lib/services/product-profile.service";
 
 const FOLLOWUP_ELIGIBLE_EMAIL_STATUSES = ["sent", "delivered", "opened", "clicked"] as const;
 
@@ -56,13 +57,14 @@ export async function processPendingFollowups() {
   const activeCampaigns = await db
     .select({
       id: campaigns.id,
+      tenantId: campaigns.tenantId,
       aiProvider: campaigns.aiProvider,
       aiConfig: campaigns.aiConfig,
       fromEmail: campaigns.fromEmail,
       mailAccountId: campaigns.mailAccountId,
     })
     .from(campaigns)
-    .where(eq(campaigns.status, "active"));
+    .where(and(eq(campaigns.status, "active"), eq(campaigns.campaignType, "cold_outreach")));
 
   let totalProcessed = 0;
 
@@ -74,6 +76,7 @@ export async function processPendingFollowups() {
       campaign.mailAccountId || null,
       campaign.fromEmail || null
     );
+    const productProfile = await getProductProfile(campaign.tenantId);
 
     for (const step of sequence) {
       if (!step.enabled) continue;
@@ -135,8 +138,11 @@ export async function processPendingFollowups() {
               companyName: prospect.companyName || "your company",
               industry: prospect.industry || "",
               country: prospect.country || "",
-              productName: "our products and services",
-              senderName: "Our Team",
+              productName: productProfile.productName,
+              productDescription: productProfile.productDescription || undefined,
+              valueProposition: productProfile.valueProposition || undefined,
+              senderName: productProfile.senderName,
+              senderTitle: productProfile.senderTitle || undefined,
               angle: step.angle || "value_prop",
               previousEmailBody: previousEmail.body || "",
               stepNumber: step.stepNumber,

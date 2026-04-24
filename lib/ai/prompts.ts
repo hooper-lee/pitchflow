@@ -1,3 +1,11 @@
+import {
+  COMMON_EMAIL_SKILL,
+  EMAIL_JSON_OUTPUT_RULES,
+  FOLLOWUP_EMAIL_SKILL,
+  OUTREACH_EMAIL_SKILL,
+  REPLY_FOLLOWUP_EMAIL_SKILL,
+} from "./email-marketing-skill";
+
 export const OUTREACH_SYSTEM_PROMPT = `You are an expert B2B sales copywriter specializing in foreign trade / international business development emails. Your task is to write personalized cold outreach emails.
 
 Rules:
@@ -59,6 +67,8 @@ export interface EmailGenerationParams {
   country: string;
   researchSummary?: string;
   productName: string;
+  productDescription?: string;
+  valueProposition?: string;
   senderName: string;
   senderTitle?: string;
   angle?: string;
@@ -70,7 +80,10 @@ export function buildOutreachPrompt(params: EmailGenerationParams): string {
     ? `\nAngle: ${ANGLE_PROMPTS[params.angle] || ANGLE_PROMPTS.value_prop}`
     : "";
 
-  return `Write a personalized cold outreach email with the following context:
+  return `${COMMON_EMAIL_SKILL}
+${OUTREACH_EMAIL_SKILL}
+
+Write a personalized cold outreach email with the following context:
 
 Prospect:
 - Name: ${params.prospectName}
@@ -83,16 +96,21 @@ Sender:
 - Name: ${params.senderName}
 ${params.senderTitle ? `- Title: ${params.senderTitle}` : ""}
 - Product/Service: ${params.productName}
+${params.productDescription ? `- Product Description: ${params.productDescription}` : ""}
+${params.valueProposition ? `- Value Proposition: ${params.valueProposition}` : ""}
 ${angleInstruction}
 ${params.templateBody ? `\nUse this template as a guide but personalize heavily:\n${params.templateBody}` : ""}
 
-Output the email with subject line and body.`;
+${EMAIL_JSON_OUTPUT_RULES}`;
 }
 
 export function buildFollowupPrompt(
   params: EmailGenerationParams & { previousEmailBody: string; stepNumber: number }
 ): string {
-  return `Write a follow-up email (step ${params.stepNumber}) based on this context:
+  return `${COMMON_EMAIL_SKILL}
+${FOLLOWUP_EMAIL_SKILL}
+
+Write a follow-up email (step ${params.stepNumber}) based on this context:
 
 Prospect:
 - Name: ${params.prospectName}
@@ -103,6 +121,8 @@ Prospect:
 Sender:
 - Name: ${params.senderName}
 - Product/Service: ${params.productName}
+${params.productDescription ? `- Product Description: ${params.productDescription}` : ""}
+${params.valueProposition ? `- Value Proposition: ${params.valueProposition}` : ""}
 
 Previous email sent (prospect did not reply):
 ---
@@ -111,7 +131,46 @@ ${params.previousEmailBody}
 
 ${params.angle ? `Angle: ${ANGLE_PROMPTS[params.angle] || ANGLE_PROMPTS.value_prop}` : "Angle: value_prop"}
 
-Write a follow-up that adds new value. Output subject and body.`;
+${EMAIL_JSON_OUTPUT_RULES}`;
+}
+
+export function buildReplyFollowupPrompt(
+  params: EmailGenerationParams & {
+    previousEmailBody?: string;
+    replyBody: string;
+    replySubject?: string;
+  }
+): string {
+  return `${COMMON_EMAIL_SKILL}
+${REPLY_FOLLOWUP_EMAIL_SKILL}
+
+Write a warm reply-follow-up email based on this context:
+
+Prospect:
+- Name: ${params.prospectName}
+- Company: ${params.companyName}
+- Industry: ${params.industry}
+- Country: ${params.country}
+${params.researchSummary ? `- Research: ${params.researchSummary}` : ""}
+
+Sender:
+- Name: ${params.senderName}
+${params.senderTitle ? `- Title: ${params.senderTitle}` : ""}
+- Product/Service: ${params.productName}
+${params.productDescription ? `- Product Description: ${params.productDescription}` : ""}
+${params.valueProposition ? `- Value Proposition: ${params.valueProposition}` : ""}
+
+Previous email:
+---
+${params.previousEmailBody || "N/A"}
+---
+
+Prospect reply${params.replySubject ? ` (${params.replySubject})` : ""}:
+---
+${params.replyBody}
+---
+
+${EMAIL_JSON_OUTPUT_RULES}`;
 }
 
 // ── Prospect Research Prompts ─────────────────────────────────

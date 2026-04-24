@@ -40,4 +40,10 @@ export function getAIProviderWithConfig(
   return providers[provider];
 }
 
-export { buildOutreachPrompt, buildFollowupPrompt, OUTREACH_SYSTEM_PROMPT, FOLLOWUP_SYSTEM_PROMPT } from "./prompts";
+export {
+  buildOutreachPrompt,
+  buildFollowupPrompt,
+  buildReplyFollowupPrompt,
+  OUTREACH_SYSTEM_PROMPT,
+  FOLLOWUP_SYSTEM_PROMPT,
+} from "./prompts";

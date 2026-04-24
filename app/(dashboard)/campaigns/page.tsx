@@ -12,6 +12,7 @@ interface Campaign {
   id: string;
   name: string;
   status: string;
+  campaignType?: string | null;
   industry: string | null;
   totalProspects: number | null;
   sentCount: number | null;

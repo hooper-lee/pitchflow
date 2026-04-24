@@ -294,7 +294,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
         return;
       }
 
-      toast({ title: template ? "模板已更新" : "模板已创建" });
+      toast({ title: template ? "邮件素材已更新" : "邮件素材已创建" });
       router.push("/templates");
       router.refresh();
     } catch {
@@ -311,13 +311,13 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
     <form onSubmit={handleSubmit} className="space-y-5">
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-xl">模板信息</CardTitle>
-          <CardDescription>设置模板名称和投递角度</CardDescription>
+          <CardTitle className="text-xl">素材信息</CardTitle>
+          <CardDescription>设置素材名称和 AI 生成邮件时参考的投递角度</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">模板名称 *</Label>
+              <Label htmlFor="name">素材名称 *</Label>
               <Input
                 id="name"
                 value={name}
@@ -364,7 +364,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
           <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
             <p className="text-sm font-medium text-slate-900">发件邮箱规则</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              模板不再单独配置发件邮箱。活动发送时会直接使用当前登录账号注册邮箱对应的已连接邮箱账号。
+              邮件素材不再单独配置发件邮箱。活动发送时会直接使用当前登录账号注册邮箱对应的已连接邮箱账号。
             </p>
           </div>
         </CardContent>
@@ -375,7 +375,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
           <div>
             <CardTitle>邮件内容</CardTitle>
             <CardDescription>
-              使用模板变量和 AI 生成个性化邮件
+              使用变量和 AI 生成个性化邮件，素材内容不会作为固定正文直接发送
             </CardDescription>
           </div>
           <Button
@@ -422,7 +422,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
 
           <div>
             <Label className="text-sm text-muted-foreground">
-              点击插入模板变量（当前插入到: {insertTarget === "subject" ? "主题" : "正文"}）:
+              点击插入变量（当前插入到: {insertTarget === "subject" ? "主题" : "正文"}）:
             </Label>
             <div className="flex flex-wrap gap-2 mt-2">
               {TEMPLATE_VARIABLES.map((v) => (
@@ -566,7 +566,7 @@ export function TemplateEditor({ template }: TemplateEditorProps) {
 
       <div className="flex gap-3">
         <Button type="submit" disabled={loading}>
-          {loading ? "保存中..." : template ? "更新模板" : "创建模板"}
+          {loading ? "保存中..." : template ? "更新素材" : "创建素材"}
         </Button>
         <Button
           type="button"

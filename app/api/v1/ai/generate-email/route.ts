@@ -4,6 +4,7 @@ import { getAIProviderWithConfig, buildOutreachPrompt, buildFollowupPrompt } fro
 import { parseJsonWithRepair } from "@/lib/ai/json-utils";
 import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
 import { getDefaultResearchProvider } from "@/lib/services/config.service";
+import { getProductProfile } from "@/lib/services/product-profile.service";
 
 type AIProvider = "claude" | "openai" | "custom";
 type GeneratedEmail = { subject: string; body: string };
@@ -78,7 +79,7 @@ function normalizeGeneratedEmail(value: unknown): GeneratedEmail {
   return { subject: "Quick question", body: "" };
 }
 
-function buildPrompt(body: Record<string, unknown>) {
+function buildPrompt(body: Record<string, unknown>, productProfile?: Awaited<ReturnType<typeof getProductProfile>>) {
   const {
     type = "outreach",
     prospectName,
@@ -104,9 +105,11 @@ function buildPrompt(body: Record<string, unknown>) {
           industry: asString(industry),
           country: asString(country),
           researchSummary: asOptionalString(researchSummary),
-          productName: asString(productName, "our products"),
-          senderName: asString(senderName, "Our Team"),
-          senderTitle: asOptionalString(senderTitle),
+          productName: asString(productName, productProfile?.productName || "our products"),
+          productDescription: productProfile?.productDescription || undefined,
+          valueProposition: productProfile?.valueProposition || undefined,
+          senderName: asString(senderName, productProfile?.senderName || "Our Team"),
+          senderTitle: asOptionalString(senderTitle) || productProfile?.senderTitle || undefined,
           angle: asOptionalString(angle),
           previousEmailBody: asString(previousEmailBody),
           stepNumber: Number(stepNumber || 2),
@@ -117,9 +120,11 @@ function buildPrompt(body: Record<string, unknown>) {
           industry: asString(industry),
           country: asString(country),
           researchSummary: asOptionalString(researchSummary),
-          productName: asString(productName, "our products"),
-          senderName: asString(senderName, "Our Team"),
-          senderTitle: asOptionalString(senderTitle),
+          productName: asString(productName, productProfile?.productName || "our products"),
+          productDescription: productProfile?.productDescription || undefined,
+          valueProposition: productProfile?.valueProposition || undefined,
+          senderName: asString(senderName, productProfile?.senderName || "Our Team"),
+          senderTitle: asOptionalString(senderTitle) || productProfile?.senderTitle || undefined,
           angle: asOptionalString(angle),
           templateBody: asOptionalString(templateBody),
         });
@@ -137,9 +142,9 @@ async function resolveAI(body: Record<string, unknown>) {
   return getAIProviderWithConfig(resolvedProvider);
 }
 
-async function generateEmailResult(body: Record<string, unknown>) {
+async function generateEmailResult(body: Record<string, unknown>, tenantId: string) {
   const ai = await resolveAI(body);
-  const prompt = buildPrompt(body);
+  const prompt = buildPrompt(body, await getProductProfile(tenantId));
   const result = await ai.generateEmail({ prompt });
   return normalizeGeneratedEmail(result);
 }
@@ -223,13 +228,13 @@ function createStreamResponse(emailPromise: Promise<GeneratedEmail>) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireTenant();
+    const { tenantId } = await requireTenant();
     const body = await request.json();
     if (body.stream) {
-      return createStreamResponse(generateEmailResult(body));
+      return createStreamResponse(generateEmailResult(body, tenantId));
     }
 
-    const result = await generateEmailResult(body);
+    const result = await generateEmailResult(body, tenantId);
     return apiResponse(result);
   } catch (error) {
     return handleApiError(error);

@@ -179,7 +179,10 @@ const statusLabels: Record<string, string> = {
   new: "新线索",
   contacted: "已联系",
   replied: "已回复",
+  following_up: "跟进中",
+  interested: "有意向",
   converted: "已转化",
+  not_following: "暂不跟进",
   bounced: "退回",
   unsubscribed: "退订",
 };

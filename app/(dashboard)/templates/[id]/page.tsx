@@ -40,14 +40,14 @@ export default function EditTemplatePage() {
   }
 
   if (!template) {
-    return <div>模板未找到</div>;
+    return <div>邮件素材未找到</div>;
   }
 
   return (
     <div className="max-w-4xl page-shell">
       <div className="page-header">
         <div>
-          <h1 className="page-title">编辑模板</h1>
+          <h1 className="page-title">编辑邮件素材</h1>
           <p className="page-subtitle">{template.name}</p>
         </div>
       </div>

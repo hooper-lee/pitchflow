@@ -15,11 +15,14 @@ import {
   getMailAccountById,
   getUserMailAccountByRegisteredEmail,
 } from "@/lib/services/mail-account.service";
+import { getProductProfile } from "@/lib/services/product-profile.service";
+import { buildReplyFollowupPrompt } from "@/lib/ai";
 
 interface CreateCampaignParams {
   name: string;
   industry?: string;
   targetPersona?: string;
+  campaignType?: "cold_outreach" | "reply_followup";
   templateId?: string;
   prospectIds?: string[];
   aiProvider?: "claude" | "openai" | "custom";
@@ -97,12 +100,16 @@ export async function getCampaignProspectCount(campaignId: string): Promise<numb
 
 export async function createCampaign(tenantId: string, data: CreateCampaignParams) {
   const { prospectIds, ...campaignData } = data;
+  if (prospectIds?.length) {
+    await assertCampaignProspectsMatchType(tenantId, prospectIds, campaignData.campaignType || "cold_outreach");
+  }
   const totalProspects = prospectIds?.length || 0;
 
   const [campaign] = await db
     .insert(campaigns)
     .values({
       ...campaignData,
+      campaignType: campaignData.campaignType || "cold_outreach",
       aiConfig: campaignData.aiConfig || null,
       tenantId,
       status: "draft",
@@ -119,11 +126,13 @@ export async function createCampaign(tenantId: string, data: CreateCampaignParam
     );
   }
 
-  await db.insert(followupSequences).values([
-    { campaignId: campaign.id, stepNumber: 1, delayDays: 3, angle: "value_prop", enabled: true },
-    { campaignId: campaign.id, stepNumber: 2, delayDays: 7, angle: "social_proof", enabled: true },
-    { campaignId: campaign.id, stepNumber: 3, delayDays: 14, angle: "urgency", enabled: true },
-  ]);
+  if ((campaign.campaignType || "cold_outreach") === "cold_outreach") {
+    await db.insert(followupSequences).values([
+      { campaignId: campaign.id, stepNumber: 1, delayDays: 3, angle: "value_prop", enabled: true },
+      { campaignId: campaign.id, stepNumber: 2, delayDays: 7, angle: "social_proof", enabled: true },
+      { campaignId: campaign.id, stepNumber: 3, delayDays: 14, angle: "urgency", enabled: true },
+    ]);
+  }
 
   return campaign;
 }
@@ -140,6 +149,7 @@ export async function startCampaign(
   if (campaign.status !== "draft") throw new Error("Campaign is not in draft status");
 
   const template = await getCampaignTemplate(campaign.templateId);
+  const productProfile = await getProductProfile(tenantId);
   const sender = await resolveSender(tenantId, userId, userEmail);
   const prospectsWithEmail = await getBoundProspectsWithEmail(campaign.id);
 
@@ -189,16 +199,12 @@ export async function startCampaign(
       });
 
       const generatedEmail = await ai.generateEmail({
-        prompt: buildOutreachPrompt({
-          prospectName: prospect.contactName || "there",
-          companyName: prospect.companyName || "your company",
-          industry: prospect.industry || "",
-          country: prospect.country || "",
-          researchSummary: prospect.researchSummary || undefined,
-          productName: template?.productName || "our products and services",
-          senderName: template?.senderName || "Our Team",
-          angle: template?.angle || undefined,
-          templateBody: template?.body || undefined,
+        prompt: await buildCampaignEmailPrompt({
+          tenantId,
+          campaign,
+          prospect,
+          template,
+          productProfile,
         }),
       });
 
@@ -243,7 +249,10 @@ export async function startCampaign(
 
       await db
         .update(prospects)
-        .set({ status: "contacted", updatedAt: new Date() })
+        .set({
+          status: campaign.campaignType === "reply_followup" ? "following_up" : "contacted",
+          updatedAt: new Date(),
+        })
         .where(eq(prospects.id, prospect.id));
 
       queuedEmailIds.push(emailRecord.id);
@@ -456,6 +465,86 @@ async function getCampaignTemplate(templateId: string | null) {
     .limit(1);
 
   return template || null;
+}
+
+async function assertCampaignProspectsMatchType(
+  tenantId: string,
+  prospectIds: string[],
+  campaignType: "cold_outreach" | "reply_followup"
+) {
+  const rows = await db
+    .select({ id: prospects.id, status: prospects.status })
+    .from(prospects)
+    .where(and(eq(prospects.tenantId, tenantId), inArray(prospects.id, prospectIds)));
+  const allowedStatuses =
+    campaignType === "reply_followup"
+      ? new Set(["replied", "following_up", "interested"])
+      : new Set(["new", "contacted"]);
+  const invalidProspect = rows.find((row) => !allowedStatuses.has(row.status));
+
+  if (invalidProspect) {
+    throw new Error(
+      campaignType === "reply_followup"
+        ? "已回复跟进活动只能选择已回复、跟进中或有意向客户"
+        : "冷启动开发活动只能选择新线索或已联系但未回复客户"
+    );
+  }
+}
+
+async function buildCampaignEmailPrompt(input: {
+  tenantId: string;
+  campaign: typeof campaigns.$inferSelect;
+  prospect: typeof prospects.$inferSelect;
+  template: typeof emailTemplates.$inferSelect | null;
+  productProfile: Awaited<ReturnType<typeof getProductProfile>>;
+}) {
+  const commonInput = {
+    prospectName: input.prospect.contactName || "there",
+    companyName: input.prospect.companyName || "your company",
+    industry: input.prospect.industry || "",
+    country: input.prospect.country || "",
+    researchSummary: input.prospect.researchSummary || undefined,
+    productName: input.template?.productName || input.productProfile.productName,
+    productDescription: input.productProfile.productDescription || undefined,
+    valueProposition: input.productProfile.valueProposition || undefined,
+    senderName: input.template?.senderName || input.productProfile.senderName,
+    senderTitle: input.productProfile.senderTitle || undefined,
+    angle: input.template?.angle || undefined,
+    templateBody: input.template?.body || undefined,
+  };
+
+  if (input.campaign.campaignType !== "reply_followup") {
+    return buildOutreachPrompt(commonInput);
+  }
+
+  const replyContext = await getLatestReplyForProspect(input.prospect.id);
+  return buildReplyFollowupPrompt({
+    ...commonInput,
+    previousEmailBody: replyContext?.previousEmailBody || undefined,
+    replyBody: replyContext?.replyBody || input.prospect.researchSummary || "",
+    replySubject: replyContext?.replySubject || undefined,
+  });
+}
+
+async function getLatestReplyForProspect(prospectId: string) {
+  const [reply] = await db
+    .select({
+      replyBody: emailReplies.textBody,
+      replySubject: emailReplies.subject,
+      emailBody: emails.body,
+    })
+    .from(emailReplies)
+    .leftJoin(emails, eq(emailReplies.emailId, emails.id))
+    .where(eq(emailReplies.prospectId, prospectId))
+    .orderBy(desc(emailReplies.receivedAt))
+    .limit(1);
+
+  if (!reply) return null;
+  return {
+    replyBody: reply.replyBody || "",
+    replySubject: reply.replySubject || undefined,
+    previousEmailBody: reply.emailBody || undefined,
+  };
 }
 
 async function getBoundProspectsWithEmail(campaignId: string) {

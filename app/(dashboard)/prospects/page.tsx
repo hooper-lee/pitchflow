@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Users } from "lucide-react";
+import { Plus, Target, Users } from "lucide-react";
 
 type ProspectItem = Awaited<ReturnType<typeof fetch>> extends never ? never : {
   id: string;
@@ -104,12 +104,20 @@ export default function ProspectsPage() {
             管理你的潜在客户线索
           </p>
         </div>
-        <Link href="/prospects/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            挖掘客户
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/prospects/icp-profiles">
+            <Button variant="outline">
+              <Target className="mr-2 h-4 w-4" />
+              客户画像
+            </Button>
+          </Link>
+          <Link href="/prospects/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              挖掘客户
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-[24px] border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
@@ -173,6 +181,8 @@ export default function ProspectsPage() {
           <TabsTrigger value="new">新线索</TabsTrigger>
           <TabsTrigger value="contacted">已联系</TabsTrigger>
           <TabsTrigger value="replied">已回复</TabsTrigger>
+          <TabsTrigger value="following_up">跟进中</TabsTrigger>
+          <TabsTrigger value="interested">有意向</TabsTrigger>
           <TabsTrigger value="converted">已转化</TabsTrigger>
         </TabsList>
         <TabsContent value={statusFilter} className="mt-4">

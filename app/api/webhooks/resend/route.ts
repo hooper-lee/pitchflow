@@ -127,11 +127,14 @@ async function handleEmailReply(resendId: string) {
 
     await db
       .update(prospects)
-      .set({ status: "replied", updatedAt: new Date() })
+      .set({
+        status: sql`CASE WHEN ${prospects.status} = 'following_up' THEN 'interested'::prospect_status ELSE 'replied'::prospect_status END`,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(prospects.id, email.prospectId),
-          inArray(prospects.status, ["new", "contacted"])
+          inArray(prospects.status, ["new", "contacted", "following_up"])
         )
       );
 

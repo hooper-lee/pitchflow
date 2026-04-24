@@ -70,6 +70,15 @@ export default function SettingsPage() {
           </Card>
         </Link>
 
+        <Link href="/settings/product-profile">
+          <Card className="cursor-pointer transition-colors hover:bg-slate-50">
+            <CardHeader>
+              <CardTitle className="text-base">产品资料</CardTitle>
+              <CardDescription>配置无模板生成邮件时的默认产品和卖点</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         <Link href="/settings/alerts">
           <Card className="cursor-pointer transition-colors hover:bg-slate-50">
             <CardHeader>

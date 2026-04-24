@@ -28,7 +28,10 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
   "new",
   "contacted",
   "replied",
+  "following_up",
+  "interested",
   "converted",
+  "not_following",
   "bounced",
   "unsubscribed",
 ]);
@@ -48,6 +51,10 @@ export const campaignStatusEnum = pgEnum("campaign_status", [
   "paused",
   "completed",
   "archived",
+]);
+export const campaignTypeEnum = pgEnum("campaign_type", [
+  "cold_outreach",
+  "reply_followup",
 ]);
 
 export const emailStatusEnum = pgEnum("email_status", [
@@ -73,6 +80,44 @@ export const mailAccountStateEnum = pgEnum("mail_account_state", [
   "unset",
 ]);
 export const mailAccountAuthTypeEnum = pgEnum("mail_account_auth_type", ["imap_smtp", "oauth2"]);
+export const discoveryJobStatusEnum = pgEnum("discovery_job_status", [
+  "pending",
+  "searching",
+  "crawling",
+  "filtering",
+  "scoring",
+  "reviewing",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export const discoveryCandidateDecisionEnum = pgEnum("discovery_candidate_decision", [
+  "pending",
+  "accepted",
+  "rejected",
+  "needs_review",
+  "blacklisted",
+  "saved",
+]);
+export const discoveryFeedbackActionEnum = pgEnum("discovery_feedback_action", [
+  "accept",
+  "reject",
+  "blacklist",
+  "restore",
+  "save_to_prospect",
+]);
+export const blocklistTypeEnum = pgEnum("blocklist_type", [
+  "domain",
+  "company",
+  "keyword",
+  "category",
+  "pattern",
+]);
+export const blocklistScopeEnum = pgEnum("blocklist_scope", [
+  "tenant",
+  "user",
+  "icp_profile",
+]);
 
 // ── Tables ─────────────────────────────────────────────
 
@@ -217,6 +262,216 @@ export const prospects = pgTable(
   })
 );
 
+export const icpProfiles = pgTable(
+  "icp_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    industry: varchar("industry", { length: 255 }),
+    targetCustomerText: text("target_customer_text"),
+    mustHave: jsonb("must_have").$type<string[]>().default([]).notNull(),
+    mustNotHave: jsonb("must_not_have").$type<string[]>().default([]).notNull(),
+    positiveKeywords: jsonb("positive_keywords").$type<string[]>().default([]).notNull(),
+    negativeKeywords: jsonb("negative_keywords").$type<string[]>().default([]).notNull(),
+    productCategories: jsonb("product_categories").$type<string[]>().default([]).notNull(),
+    salesModel: varchar("sales_model", { length: 100 }),
+    scoreWeights: jsonb("score_weights")
+      .$type<Record<string, number>>()
+      .default({})
+      .notNull(),
+    minScoreToSave: integer("min_score_to_save").default(80).notNull(),
+    minScoreToReview: integer("min_score_to_review").default(60).notNull(),
+    promptTemplate: text("prompt_template"),
+    isDefault: boolean("is_default").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("icp_profiles_tenant_idx").on(table.tenantId),
+    userIdx: index("icp_profiles_user_idx").on(table.userId),
+  })
+);
+
+export const leadDiscoveryJobs = pgTable(
+  "lead_discovery_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    icpProfileId: uuid("icp_profile_id").references(() => icpProfiles.id, {
+      onDelete: "set null",
+    }),
+    name: varchar("name", { length: 255 }).notNull(),
+    status: discoveryJobStatusEnum("status").default("pending").notNull(),
+    industry: varchar("industry", { length: 255 }),
+    country: varchar("country", { length: 100 }),
+    keywords: jsonb("keywords").$type<string[]>().default([]).notNull(),
+    inputQuery: text("input_query"),
+    filters: jsonb("filters").$type<Record<string, unknown>>().default({}).notNull(),
+    targetLimit: integer("target_limit").default(50).notNull(),
+    searchedCount: integer("searched_count").default(0).notNull(),
+    crawledCount: integer("crawled_count").default(0).notNull(),
+    candidateCount: integer("candidate_count").default(0).notNull(),
+    acceptedCount: integer("accepted_count").default(0).notNull(),
+    rejectedCount: integer("rejected_count").default(0).notNull(),
+    savedCount: integer("saved_count").default(0).notNull(),
+    progress: integer("progress").default(0).notNull(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("lead_discovery_jobs_tenant_idx").on(table.tenantId),
+    userIdx: index("lead_discovery_jobs_user_idx").on(table.userId),
+    statusIdx: index("lead_discovery_jobs_status_idx").on(table.status),
+    createdAtIdx: index("lead_discovery_jobs_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const leadDiscoveryCandidates = pgTable(
+  "lead_discovery_candidates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => leadDiscoveryJobs.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    icpProfileId: uuid("icp_profile_id").references(() => icpProfiles.id, {
+      onDelete: "set null",
+    }),
+    createdProspectId: uuid("created_prospect_id").references(() => prospects.id, {
+      onDelete: "set null",
+    }),
+    url: text("url"),
+    finalUrl: text("final_url"),
+    domain: varchar("domain", { length: 255 }),
+    rootDomain: varchar("root_domain", { length: 255 }),
+    companyName: varchar("company_name", { length: 500 }),
+    title: text("title"),
+    snippet: text("snippet"),
+    source: varchar("source", { length: 100 }),
+    searchQuery: text("search_query"),
+    pagesFetched: jsonb("pages_fetched")
+      .$type<Record<string, unknown>[]>()
+      .default([])
+      .notNull(),
+    rawText: text("raw_text"),
+    detectorScore: integer("detector_score"),
+    detectorDimensions: jsonb("detector_dimensions")
+      .$type<Record<string, number>>()
+      .default({})
+      .notNull(),
+    ruleScore: integer("rule_score"),
+    aiScore: integer("ai_score"),
+    feedbackScore: integer("feedback_score"),
+    finalScore: integer("final_score"),
+    decision: discoveryCandidateDecisionEnum("decision").default("pending").notNull(),
+    rejectReasons: jsonb("reject_reasons").$type<string[]>().default([]).notNull(),
+    matchedRules: jsonb("matched_rules").$type<string[]>().default([]).notNull(),
+    evidence: jsonb("evidence")
+      .$type<{ source: string; quote: string; reason?: string }[]>()
+      .default([])
+      .notNull(),
+    contacts: jsonb("contacts").$type<Record<string, unknown>>().default({}).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("lead_candidates_tenant_idx").on(table.tenantId),
+    jobIdx: index("lead_candidates_job_idx").on(table.jobId),
+    rootDomainIdx: index("lead_candidates_root_domain_idx").on(table.rootDomain),
+    decisionIdx: index("lead_candidates_decision_idx").on(table.decision),
+    scoreIdx: index("lead_candidates_final_score_idx").on(table.finalScore),
+    uniqueJobDomain: unique("lead_candidates_job_root_domain_unique").on(
+      table.jobId,
+      table.rootDomain
+    ),
+  })
+);
+
+export const leadDiscoveryFeedback = pgTable(
+  "lead_discovery_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    jobId: uuid("job_id").references(() => leadDiscoveryJobs.id, {
+      onDelete: "set null",
+    }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => leadDiscoveryCandidates.id, { onDelete: "cascade" }),
+    icpProfileId: uuid("icp_profile_id").references(() => icpProfiles.id, {
+      onDelete: "set null",
+    }),
+    action: discoveryFeedbackActionEnum("action").notNull(),
+    reason: text("reason"),
+    reasonTags: jsonb("reason_tags").$type<string[]>().default([]).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("lead_discovery_feedback_tenant_idx").on(table.tenantId),
+    candidateIdx: index("lead_discovery_feedback_candidate_idx").on(table.candidateId),
+    actionIdx: index("lead_discovery_feedback_action_idx").on(table.action),
+  })
+);
+
+export const leadBlocklist = pgTable(
+  "lead_blocklist",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    icpProfileId: uuid("icp_profile_id").references(() => icpProfiles.id, {
+      onDelete: "cascade",
+    }),
+    type: blocklistTypeEnum("type").notNull(),
+    value: varchar("value", { length: 500 }).notNull(),
+    normalizedValue: varchar("normalized_value", { length: 500 }).notNull(),
+    reason: text("reason"),
+    scope: blocklistScopeEnum("scope").default("tenant").notNull(),
+    sourceCandidateId: uuid("source_candidate_id").references(
+      () => leadDiscoveryCandidates.id,
+      { onDelete: "set null" }
+    ),
+    sourceJobId: uuid("source_job_id").references(() => leadDiscoveryJobs.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("lead_blocklist_tenant_idx").on(table.tenantId),
+    normalizedValueIdx: index("lead_blocklist_normalized_value_idx").on(
+      table.normalizedValue
+    ),
+    typeIdx: index("lead_blocklist_type_idx").on(table.type),
+    uniqueBlock: unique("lead_blocklist_unique").on(
+      table.tenantId,
+      table.type,
+      table.normalizedValue,
+      table.scope,
+      table.icpProfileId
+    ),
+  })
+);
+
 export const mailAccounts = pgTable(
   "mail_accounts",
   {
@@ -352,6 +607,7 @@ export const campaigns = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     industry: varchar("industry", { length: 255 }),
     targetPersona: varchar("target_persona", { length: 255 }),
+    campaignType: campaignTypeEnum("campaign_type").default("cold_outreach").notNull(),
     templateId: uuid("template_id").references(() => emailTemplates.id),
     mailAccountId: uuid("mail_account_id").references(() => mailAccounts.id),
     fromEmail: varchar("from_email", { length: 255 }),

@@ -180,6 +180,11 @@ Evaluate this prospect for B2B foreign-trade outbound sales and score it across 
 - Supplier Criteria: {supplierCriteria}
 - Decision Makers: {decisionMakers}
 
+## ICP Discovery Context
+{icpContext}
+
+When ICP Discovery Context is available, use it to calibrate ICP Match Score and Deal Potential Score against the user's target customer definition. Do not overrule direct research evidence, but penalize candidates that conflict with must-not-have or negative keyword signals.
+
 ## Scoring Guidance
 
 1. ICP Match Score (ICP匹配度)

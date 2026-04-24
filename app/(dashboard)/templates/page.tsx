@@ -40,7 +40,7 @@ export default function TemplatesPage() {
   }, [page]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("确定删除此模板？")) return;
+    if (!confirm("确定删除此邮件素材？")) return;
     await fetch(`/api/v1/templates/${id}`, { method: "DELETE" });
     setTemplates(templates.filter((t) => t.id !== id));
     setTotal((current) => Math.max(0, current - 1));
@@ -50,15 +50,15 @@ export default function TemplatesPage() {
     <div className="page-shell">
       <div className="page-header">
         <div>
-          <h1 className="page-title">邮件模板</h1>
+          <h1 className="page-title">邮件素材</h1>
           <p className="page-subtitle">
-            管理你的邮件模板，使用 AI 生成个性化内容
+            管理 AI 生成邮件时参考的产品卖点、语气和正文素材
           </p>
         </div>
         <Link href="/templates/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" />
-            新建模板
+            新建素材
           </Button>
         </Link>
       </div>
@@ -68,11 +68,11 @@ export default function TemplatesPage() {
       ) : templates.length === 0 ? (
         <EmptyState
           icon={<FileText className="h-12 w-12" />}
-          title="还没有邮件模板"
-          description="创建邮件模板，用于批量发送个性化开发信"
+          title="还没有邮件素材"
+          description="创建邮件素材，让 AI 为每个客户生成个性化邮件"
           action={
             <Link href="/templates/new">
-              <Button>创建模板</Button>
+              <Button>创建素材</Button>
             </Link>
           }
         />
@@ -124,7 +124,7 @@ export default function TemplatesPage() {
             page={page}
             totalPages={totalPages}
             total={total}
-            itemLabel="个模板"
+            itemLabel="个素材"
             onPageChange={setPage}
           />
         </>

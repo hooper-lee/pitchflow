@@ -17,6 +17,7 @@ interface Campaign {
   id: string;
   name: string;
   status: string;
+  campaignType?: string | null;
   industry: string | null;
   totalProspects: number | null;
   sentCount: number | null;
@@ -31,6 +32,11 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
   paused: { label: "已暂停", variant: "outline" },
   completed: { label: "已完成", variant: "secondary" },
   archived: { label: "已归档", variant: "outline" },
+};
+
+const campaignTypeMap: Record<string, string> = {
+  cold_outreach: "冷启动开发",
+  reply_followup: "已回复推进",
 };
 
 export function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
@@ -85,7 +91,12 @@ export function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
                 </TableCell>
                 <TableCell>{campaign.industry || "—"}</TableCell>
                 <TableCell>
-                  <Badge variant={status.variant}>{status.label}</Badge>
+                  <div className="flex flex-col gap-2">
+                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Badge variant="outline">
+                      {campaignTypeMap[campaign.campaignType || "cold_outreach"]}
+                    </Badge>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-600">

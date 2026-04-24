@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard,
   Users,
+  SearchCheck,
   Mail,
   FileText,
   BarChart3,
@@ -19,11 +20,26 @@ import {
 const navItems = [
   { href: "/dashboard", label: "仪表盘", icon: LayoutDashboard },
   { href: "/prospects", label: "客户管理", icon: Users },
+  { href: "/prospects/discovery-jobs", label: "精准挖掘", icon: SearchCheck },
   { href: "/campaigns", label: "活动管理", icon: Mail },
-  { href: "/templates", label: "邮件模板", icon: FileText },
+  { href: "/templates", label: "邮件素材", icon: FileText },
   { href: "/analytics", label: "数据分析", icon: BarChart3 },
   { href: "/settings", label: "设置", icon: Settings },
 ];
+
+function isActiveNavItem(pathname: string, href: string) {
+  if (href === "/dashboard") return pathname === href;
+  if (pathname === href) return true;
+
+  const activeNestedItem = navItems.find(
+    (item) =>
+      item.href !== href &&
+      item.href.startsWith(`${href}/`) &&
+      (pathname === item.href || pathname.startsWith(`${item.href}/`))
+  );
+
+  return !activeNestedItem && pathname.startsWith(`${href}/`);
+}
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -46,9 +62,7 @@ export function MobileNav() {
         </div>
         <nav className="px-3 py-4 space-y-1">
           {navItems.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            const isActive = isActiveNavItem(pathname, item.href);
             return (
               <Link
                 key={item.href}

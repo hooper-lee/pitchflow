@@ -61,6 +61,7 @@ export function CampaignForm() {
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
   const [targetPersona, setTargetPersona] = useState("");
+  const [campaignType, setCampaignType] = useState<"cold_outreach" | "reply_followup">("cold_outreach");
   const [templateId, setTemplateId] = useState("");
   const [aiProvider, setAiProvider] = useState("");
   const [customBaseURL, setCustomBaseURL] = useState("");
@@ -106,7 +107,13 @@ export function CampaignForm() {
   const mailboxReady = mailAccounts.some((account) => account.email === session?.user?.email);
   const displayedFromAddress = session?.user?.email || "未配置";
 
+  const allowedStatuses =
+    campaignType === "reply_followup"
+      ? new Set(["replied", "following_up", "interested"])
+      : new Set(["new", "contacted"]);
+
   const filteredProspects = prospects.filter((p) => {
+    if (!allowedStatuses.has(p.status)) return false;
     if (leadGradeFilter !== "all" && p.leadGrade !== leadGradeFilter) {
       return false;
     }
@@ -145,6 +152,7 @@ export function CampaignForm() {
         name,
         industry: industry || undefined,
         targetPersona: targetPersona || undefined,
+        campaignType,
         templateId: templateId || undefined,
         aiProvider: "custom",
       };
@@ -209,6 +217,30 @@ export function CampaignForm() {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="campaignType">活动类型</Label>
+            <Select
+              value={campaignType}
+              onValueChange={(value) => {
+                setCampaignType(value as "cold_outreach" | "reply_followup");
+                setSelectedIds(new Set());
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择活动类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cold_outreach">冷启动开发</SelectItem>
+                <SelectItem value="reply_followup">已回复客户推进</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {campaignType === "reply_followup"
+                ? "只显示已回复、跟进中或有意向客户，邮件会基于回复上下文生成。"
+                : "只显示新线索或已联系未回复客户，用于首封开发信和自动跟进。"}
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="industry">目标行业 / 产品</Label>
             <Input
               id="industry"
@@ -252,10 +284,10 @@ export function CampaignForm() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="template">邮件模板</Label>
+              <Label htmlFor="template">邮件素材</Label>
               <Select value={templateId} onValueChange={setTemplateId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="选择模板（可选）" />
+                  <SelectValue placeholder="选择邮件素材（可选）" />
                 </SelectTrigger>
                 <SelectContent>
                   {templates.map((t) => (
@@ -355,7 +387,7 @@ export function CampaignForm() {
                 <div>
                   <CardTitle className="text-base">选择目标客户</CardTitle>
                   <CardDescription>
-                    已选 {selectedIds.size} 个客户（共 {prospects.length} 个有邮箱的客户）
+                    已选 {selectedIds.size} 个客户（当前类型可选 {filteredProspects.length} 个）
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
