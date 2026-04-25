@@ -180,7 +180,7 @@ docker run --rm --network host \
 然后正常启动：
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
 默认会启动：
@@ -195,9 +195,9 @@ docker compose -f docker-compose.prod.yml up -d --build
 ### 4. 首次部署后检查
 
 ```bash
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs -f app
-docker compose -f docker-compose.prod.yml logs -f workers
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f app
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f workers
 ```
 
 访问：
