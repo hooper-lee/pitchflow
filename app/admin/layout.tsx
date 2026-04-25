@@ -11,6 +11,7 @@ import {
   ScrollText,
   Timer,
   Globe,
+  FlaskConical,
 } from "lucide-react";
 
 const adminNavItems = [
@@ -21,6 +22,7 @@ const adminNavItems = [
   { href: "/admin/tasks", label: "定时任务", icon: Timer },
   { href: "/admin/configs", label: "系统配置", icon: Settings },
   { href: "/admin/detector", label: "网站检测器", icon: Globe },
+  { href: "/admin/discovery-evals", label: "挖掘评测", icon: FlaskConical },
   { href: "/admin/audit-logs", label: "审计日志", icon: ScrollText },
 ];
 

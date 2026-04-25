@@ -1,9 +1,18 @@
 import { NextRequest } from "next/server";
 import { requireTenant } from "@/lib/auth";
-import { getAIProviderWithConfig, buildOutreachPrompt, buildFollowupPrompt } from "@/lib/ai";
+import {
+  getAIProviderWithConfig,
+  buildOutreachPromptFromTemplate,
+  buildFollowupPromptFromTemplate,
+} from "@/lib/ai";
 import { parseJsonWithRepair } from "@/lib/ai/json-utils";
 import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
-import { getDefaultResearchProvider } from "@/lib/services/config.service";
+import {
+  AI_PROMPT_KEYS,
+  getAiPromptConfig,
+  getDefaultResearchProvider,
+  interpolatePromptTemplate,
+} from "@/lib/services/config.service";
 import { getProductProfile } from "@/lib/services/product-profile.service";
 
 type AIProvider = "claude" | "openai" | "custom";
@@ -79,7 +88,10 @@ function normalizeGeneratedEmail(value: unknown): GeneratedEmail {
   return { subject: "Quick question", body: "" };
 }
 
-function buildPrompt(body: Record<string, unknown>, productProfile?: Awaited<ReturnType<typeof getProductProfile>>) {
+async function buildPrompt(
+  body: Record<string, unknown>,
+  productProfile?: Awaited<ReturnType<typeof getProductProfile>>
+) {
   const {
     type = "outreach",
     prospectName,
@@ -97,37 +109,31 @@ function buildPrompt(body: Record<string, unknown>, productProfile?: Awaited<Ret
     userRequirements,
   } = body;
 
+  const promptValues = {
+    prospectName: asString(prospectName),
+    companyName: asString(companyName),
+    industry: asString(industry),
+    country: asString(country),
+    researchSummary: asString(researchSummary),
+    productName: asString(productName, productProfile?.productName || "our products"),
+    productDescription: productProfile?.productDescription || "",
+    valueProposition: productProfile?.valueProposition || "",
+    senderName: asString(senderName, productProfile?.senderName || "Our Team"),
+    senderTitle: asOptionalString(senderTitle) || productProfile?.senderTitle || "",
+    angle: asString(angle),
+    templateBody: asString(templateBody),
+    previousEmailBody: asString(previousEmailBody),
+    stepNumber: Number(stepNumber || 2),
+  };
+  const promptKey =
+    type === "followup"
+      ? AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER
+      : AI_PROMPT_KEYS.EMAIL_OUTREACH_USER;
+  const promptTemplate = await getAiPromptConfig(promptKey);
   let prompt =
     type === "followup"
-      ? buildFollowupPrompt({
-          prospectName: asString(prospectName),
-          companyName: asString(companyName),
-          industry: asString(industry),
-          country: asString(country),
-          researchSummary: asOptionalString(researchSummary),
-          productName: asString(productName, productProfile?.productName || "our products"),
-          productDescription: productProfile?.productDescription || undefined,
-          valueProposition: productProfile?.valueProposition || undefined,
-          senderName: asString(senderName, productProfile?.senderName || "Our Team"),
-          senderTitle: asOptionalString(senderTitle) || productProfile?.senderTitle || undefined,
-          angle: asOptionalString(angle),
-          previousEmailBody: asString(previousEmailBody),
-          stepNumber: Number(stepNumber || 2),
-        })
-      : buildOutreachPrompt({
-          prospectName: asString(prospectName),
-          companyName: asString(companyName),
-          industry: asString(industry),
-          country: asString(country),
-          researchSummary: asOptionalString(researchSummary),
-          productName: asString(productName, productProfile?.productName || "our products"),
-          productDescription: productProfile?.productDescription || undefined,
-          valueProposition: productProfile?.valueProposition || undefined,
-          senderName: asString(senderName, productProfile?.senderName || "Our Team"),
-          senderTitle: asOptionalString(senderTitle) || productProfile?.senderTitle || undefined,
-          angle: asOptionalString(angle),
-          templateBody: asOptionalString(templateBody),
-        });
+      ? buildFollowupPromptFromTemplate(interpolatePromptTemplate(promptTemplate, promptValues))
+      : buildOutreachPromptFromTemplate(interpolatePromptTemplate(promptTemplate, promptValues));
 
   if (userRequirements) {
     prompt = `${prompt}\n\nAdditional requirements from the user:\n${String(userRequirements)}`;
@@ -144,7 +150,7 @@ async function resolveAI(body: Record<string, unknown>) {
 
 async function generateEmailResult(body: Record<string, unknown>, tenantId: string) {
   const ai = await resolveAI(body);
-  const prompt = buildPrompt(body, await getProductProfile(tenantId));
+  const prompt = await buildPrompt(body, await getProductProfile(tenantId));
   const result = await ai.generateEmail({ prompt });
   return normalizeGeneratedEmail(result);
 }

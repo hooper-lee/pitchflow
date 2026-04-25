@@ -42,8 +42,11 @@ export function getAIProviderWithConfig(
 
 export {
   buildOutreachPrompt,
+  buildOutreachPromptFromTemplate,
   buildFollowupPrompt,
+  buildFollowupPromptFromTemplate,
   buildReplyFollowupPrompt,
+  buildReplyFollowupPromptFromTemplate,
   OUTREACH_SYSTEM_PROMPT,
   FOLLOWUP_SYSTEM_PROMPT,
 } from "./prompts";

@@ -8,6 +8,9 @@ export const AI_PROMPT_KEYS = {
   PROSPECT_SCORING_SYSTEM: "AI_PROMPT_PROSPECT_SCORING_SYSTEM",
   PROSPECT_RESEARCH_USER: "AI_PROMPT_PROSPECT_RESEARCH_USER",
   PROSPECT_SCORING_USER: "AI_PROMPT_PROSPECT_SCORING_USER",
+  EMAIL_OUTREACH_USER: "AI_PROMPT_EMAIL_OUTREACH_USER",
+  EMAIL_FOLLOWUP_USER: "AI_PROMPT_EMAIL_FOLLOWUP_USER",
+  EMAIL_REPLY_FOLLOWUP_USER: "AI_PROMPT_EMAIL_REPLY_FOLLOWUP_USER",
 } as const;
 
 export const SCORING_WEIGHT_KEYS = {
@@ -22,6 +25,12 @@ export const FOLLOWUP_SETTING_KEYS = {
   STOP_AFTER_DAYS: "FOLLOWUP_STOP_AFTER_DAYS",
   SCAN_INTERVAL_MINUTES: "FOLLOWUP_SCAN_INTERVAL_MINUTES",
 } as const;
+
+const EMAIL_PROMPT_KEYS = [
+  AI_PROMPT_KEYS.EMAIL_OUTREACH_USER,
+  AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER,
+  AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER,
+] as const;
 
 export const DEFAULT_SCORING_WEIGHTS = {
   [SCORING_WEIGHT_KEYS.ICP_FIT]: 25,
@@ -116,6 +125,9 @@ Analyze the company below for B2B foreign-trade outbound sales.
 ## Search Results
 {searchResults}
 
+## ICP Discovery Context
+{icpContext}
+
 ## What To Look For
 
 Focus on evidence that helps outbound sales:
@@ -128,6 +140,8 @@ Focus on evidence that helps outbound sales:
 - reachable decision makers and business contact details
 
 Do NOT invent facts. If the company looks like media, a directory, a marketplace listing, a document page, a status page, or otherwise not a real target company website, stay conservative and reflect that in the output.
+
+When ICP Discovery Context is available, use it as the user's target customer definition. Treat low source quality, Cloudflare/challenge pages, generic directories, marketplaces, news pages, and "needs_review" discovery decisions as weak evidence unless the website content clearly proves the company is a real target buyer.
 
 ## Output Requirements
 
@@ -185,6 +199,11 @@ Evaluate this prospect for B2B foreign-trade outbound sales and score it across 
 
 When ICP Discovery Context is available, use it to calibrate ICP Match Score and Deal Potential Score against the user's target customer definition. Do not overrule direct research evidence, but penalize candidates that conflict with must-not-have or negative keyword signals.
 
+Also consider discovery source quality:
+- High source quality and official-site evidence can support confidence.
+- Low source quality, challenge pages, directories, marketplaces, or weak search snippets should cap confidence unless research content clearly confirms the company.
+- Candidates marked "needs_review" should not receive high ICP or Deal Potential scores without strong direct evidence.
+
 ## Scoring Guidance
 
 1. ICP Match Score (ICP匹配度)
@@ -218,6 +237,79 @@ Return JSON:
   "riskPenaltyScore": 0-100,
   "reasoning": "1 short paragraph explaining the evidence behind the scores"
 }`,
+
+  [AI_PROMPT_KEYS.EMAIL_OUTREACH_USER]: `Write a personalized cold outreach email with the following context:
+
+Prospect:
+- Name: {prospectName}
+- Company: {companyName}
+- Industry: {industry}
+- Country: {country}
+- Research: {researchSummary}
+
+Sender:
+- Name: {senderName}
+- Title: {senderTitle}
+- Product/Service: {productName}
+- Product Description: {productDescription}
+- Value Proposition: {valueProposition}
+- Angle: {angle}
+
+Template guidance:
+{templateBody}
+
+Return only JSON according to the required email schema.`,
+
+  [AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER]: `Write a follow-up email for a prospect who has not replied.
+
+Prospect:
+- Name: {prospectName}
+- Company: {companyName}
+- Industry: {industry}
+- Country: {country}
+
+Sender:
+- Name: {senderName}
+- Title: {senderTitle}
+- Product/Service: {productName}
+- Product Description: {productDescription}
+- Value Proposition: {valueProposition}
+
+Previous email:
+{previousEmailBody}
+
+Follow-up:
+- Step Number: {stepNumber}
+- Angle: {angle}
+
+Return only JSON according to the required email schema.`,
+
+  [AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER]: `Write a warm reply-follow-up email based on a real prospect reply.
+
+Prospect:
+- Name: {prospectName}
+- Company: {companyName}
+- Industry: {industry}
+- Country: {country}
+- Research: {researchSummary}
+
+Sender:
+- Name: {senderName}
+- Title: {senderTitle}
+- Product/Service: {productName}
+- Product Description: {productDescription}
+- Value Proposition: {valueProposition}
+
+Previous email:
+{previousEmailBody}
+
+Prospect reply subject:
+{replySubject}
+
+Prospect reply:
+{replyBody}
+
+Return only JSON according to the required email schema.`,
 };
 
 /**
@@ -255,7 +347,19 @@ export async function setConfig(
  */
 export async function getAiPromptConfig(key: string): Promise<string> {
   const value = await getConfig(key);
-  return value || DEFAULT_PROMPTS[key as keyof typeof DEFAULT_PROMPTS] || "";
+  if (value) return value;
+
+  if (isEmailPromptKey(key)) {
+    throw new Error(`Missing email prompt config: ${key}`);
+  }
+
+  const defaultPrompt = DEFAULT_PROMPTS[key as keyof typeof DEFAULT_PROMPTS];
+  if (!defaultPrompt) {
+    throw new Error(`AI prompt config not found: ${key}`);
+  }
+
+  await setConfig(key, defaultPrompt, getPromptDescription(key));
+  return defaultPrompt;
 }
 
 /**
@@ -264,6 +368,7 @@ export async function getAiPromptConfig(key: string): Promise<string> {
 export async function getAllAiPromptConfigs(): Promise<
   Record<string, { value: string; description: string }>
 > {
+  await initDefaultAiPrompts();
   const allRows = await db.select().from(systemConfigs);
 
   const configs: Record<string, { value: string; description: string }> = {};
@@ -271,7 +376,7 @@ export async function getAllAiPromptConfigs(): Promise<
   for (const key of Object.values(AI_PROMPT_KEYS)) {
     const row = allRows.find((r) => r.key === key);
     configs[key] = {
-      value: row?.value || DEFAULT_PROMPTS[key] || "",
+      value: row?.value || "",
       description: row?.description || getPromptDescription(key),
     };
   }
@@ -358,6 +463,12 @@ function getPromptDescription(key: string): string {
       "AI 调研用户提示词模板（{companyName} 等占位符会被替换为实际值）",
     [AI_PROMPT_KEYS.PROSPECT_SCORING_USER]:
       "AI 评分用户提示词模板（{companyName} 等占位符会被替换为实际值）",
+    [AI_PROMPT_KEYS.EMAIL_OUTREACH_USER]:
+      "冷启动首封开发信提示词模板（用于活动首封邮件生成）",
+    [AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER]:
+      "冷启动未回复自动跟进提示词模板（用于 3/7/14 天跟进邮件生成）",
+    [AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER]:
+      "已回复客户推进提示词模板（用于基于客户回复继续推进）",
   };
   return descriptions[key] || "";
 }
@@ -419,4 +530,8 @@ function readNumericSetting(
   const rawValue = configMap.get(key);
   const parsedValue = rawValue ? Number(rawValue) : NaN;
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+}
+
+function isEmailPromptKey(key: string): key is (typeof EMAIL_PROMPT_KEYS)[number] {
+  return EMAIL_PROMPT_KEYS.includes(key as (typeof EMAIL_PROMPT_KEYS)[number]);
 }

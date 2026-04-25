@@ -17,33 +17,33 @@ import {
 const features = [
   {
     icon: Search,
-    title: "智能客户筛选",
-    desc: "按行业、关键词和国家偏置搜索潜在客户官网，过滤重复网站并沉淀搜索评分。",
+    title: "精准客户挖掘",
+    desc: "用行业、关键词或 ICP 画像发起异步挖掘，自动扩展搜索意图、过滤重复网站并沉淀搜索评分。",
   },
   {
     icon: Brain,
     title: "AI 调研评分",
-    desc: "自动提取公司类型、规模、主要产品和目标市场，输出结构化调研结果与推荐动作。",
+    desc: "结合官网内容、ICP 画像和搜索来源质量，提取公司类型、规模、主要产品和目标市场。",
   },
   {
     icon: Mail,
     title: "个性化开发信",
-    desc: "结合客户画像与模板变量生成开发信，模板可单独配置发件邮箱。",
+    desc: "冷启动首封、未回复跟进和已回复推进使用独立 Prompt，在后台统一配置和优化。",
   },
   {
     icon: Send,
     title: "活动批量发送",
-    desc: "按评分筛选客户进入活动统一发送，明确每个活动实际使用的发件邮箱。",
+    desc: "按搜索评分和调研评分筛选客户进入活动，使用当前账号注册邮箱对应的已连接邮箱发送。",
   },
   {
     icon: RefreshCw,
     title: "自动跟进节奏",
-    desc: "围绕首封邮件自动安排跟进轮次，保持同一活动发件身份一致。",
+    desc: "围绕首封邮件自动安排 3 / 7 / 14 天跟进，客户回复后停止后续自动触达。",
   },
   {
     icon: Bell,
-    title: "高意向客户告警",
-    desc: "客户打开、点击、回复后自动推送到账号邮箱、飞书或企业微信。",
+    title: "客户回复消息追踪",
+    desc: "客户回复后自动推送到账号邮箱、飞书或企业微信，并携带公司、活动和回复摘要。",
   },
 ];
 
@@ -89,18 +89,18 @@ function DemoCard({
 function DiscoveryDemo() {
   return (
     <DemoCard
-      title="客户挖掘结果演示"
-      description="展示搜索条件、官网候选和搜索评分，帮助判断哪些网站值得进入客户池。"
+      title="精准挖掘结果演示"
+      description="展示 ICP 查询意图、官网候选、搜索评分和来源质量，帮助判断哪些网站值得进入客户池。"
     >
       <div className="rounded-lg border bg-muted/30 p-4">
         <div className="mb-4 rounded-md bg-background px-3 py-2 text-sm text-muted-foreground">
-          行业：LED lighting · 国家：USA · 关键词：manufacturer supplier official site
+          ICP：北美 RTA 家具 DTC 品牌 · Intent：product / brand / official_site
         </div>
         <div className="space-y-3">
           {[
-            ["AMC Lighting", "amclighting.com", "搜索评分 86"],
-            ["Nova Illumination", "novaillumination.us", "搜索评分 78"],
-            ["Bright Source", "brightsourceled.com", "搜索评分 65"],
+            ["Burrow", "burrow.com", "搜索评分 92 · 来源质量 95"],
+            ["Floyd Home", "floydhome.com", "搜索评分 86 · 来源质量 91"],
+            ["Walker Edison", "walkeredison.com", "搜索评分 78 · 来源质量 88"],
           ].map(([name, domain, score]) => (
             <div key={domain} className="rounded-md bg-background p-4 border">
               <div className="flex items-start justify-between gap-4">
@@ -129,10 +129,10 @@ function ResearchDemo() {
       <div className="rounded-lg border bg-muted/30 p-4">
         <div className="flex items-start justify-between gap-4 rounded-md bg-background p-4 border">
           <div>
-            <p className="font-medium">AMC Lighting</p>
-            <p className="text-sm text-muted-foreground">Industrial LED Fixtures · USA</p>
+            <p className="font-medium">Burrow</p>
+            <p className="text-sm text-muted-foreground">Modular Furniture · USA</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {["员工规模 50-200", "公司类型 制造商", "主要产品 工业照明", "目标市场 北美"].map((tag) => (
+              {["员工规模 50-200", "公司类型 DTC 品牌", "主要产品 模块化家具", "目标市场 北美"].map((tag) => (
                 <span key={tag} className="text-xs rounded-full border px-3 py-1 bg-background">
                   {tag}
                 </span>
@@ -141,16 +141,16 @@ function ResearchDemo() {
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">综合评分</p>
-            <p className="text-3xl font-bold">74</p>
+            <p className="text-3xl font-bold">82</p>
             <p className="text-xs text-muted-foreground mt-1">推荐动作：优先联系</p>
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 mt-4">
           {[
-            ["ICP 匹配", "82"],
-            ["采购意向", "68"],
-            ["可触达性", "71"],
-            ["成交潜力", "76"],
+            ["ICP 匹配", "88"],
+            ["采购意向", "74"],
+            ["可触达性", "79"],
+            ["成交潜力", "86"],
           ].map(([label, score]) => (
             <div key={label} className="rounded-md bg-background p-4 border">
               <div className="flex items-center justify-between text-sm mb-2">
@@ -230,7 +230,7 @@ export function MarketingHome() {
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">六大核心能力</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              从客户筛选、AI 调研、邮件生成到跟进节奏管理，把外贸开发流程收敛到一套系统里。
+              从 ICP 精准挖掘、AI 调研、邮件生成到跟进节奏管理，把外贸开发流程收敛到一套系统里。
             </p>
           </div>
 
@@ -249,9 +249,9 @@ export function MarketingHome() {
       <section id="demo" className="py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4">客户挖掘与调研结果演示</h2>
+            <h2 className="text-3xl font-bold mb-4">精准挖掘与调研结果演示</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              不只说“能挖客户、能做调研”，而是直接展示系统产出的搜索评分、调研评分和推荐动作。
+              不只说“能挖客户、能做调研”，而是直接展示系统产出的查询意图、搜索评分、调研评分和推荐动作。
             </p>
           </div>
 

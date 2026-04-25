@@ -10,13 +10,13 @@ import {
 import { detectOfficialWebsite, extractContacts } from "@/lib/detector";
 import { getDetectorConfig } from "@/lib/detector/config";
 import { fetchPage } from "@/lib/detector/fetcher";
-import { searchCompany } from "@/lib/integrations/serpapi";
 import { classifyCandidateWithAI } from "./ai-classifier";
 import { getDiscoveryHistorySignals, getFeedbackScore } from "./blocklist";
 import { normalizeDomain, normalizeUrl, getRootDomain } from "./normalize";
 import { buildDiscoveryQueries } from "./query-expander";
 import { runRuleFilter } from "./rule-filter";
 import { calculateDiscoveryDecision } from "./scoring";
+import { searchDiscoverySources } from "./search/search-orchestrator";
 import type {
   DiscoveryAiClassifyOutput,
   DiscoveryEvidence,
@@ -25,6 +25,7 @@ import type {
   DiscoveryJobRecord,
   DiscoveryNormalizedCandidate,
 } from "./types";
+import type { DiscoveryExpandedQuery, DiscoverySearchResult } from "./search/types";
 
 type DetectorCandidate = Awaited<ReturnType<typeof detectOfficialWebsite>>["allCandidates"][number];
 
@@ -94,27 +95,43 @@ async function markJobStarted(jobId: string) {
     .where(eq(leadDiscoveryJobs.id, jobId));
 }
 
-async function collectDetectedCandidates(context: PipelineContext, queries: string[]) {
+async function collectDetectedCandidates(context: PipelineContext, queries: DiscoveryExpandedQuery[]) {
   const mergedCandidates = new Map<string, DiscoveryNormalizedCandidate>();
-  for (const query of queries) {
-    const detectorResults = await detectQuery(query, context.job.targetLimit);
-    for (const detectorCandidate of detectorResults) {
-      const normalizedCandidate = toNormalizedCandidate(detectorCandidate, query);
-      if (!normalizedCandidate) continue;
-      mergeCandidate(mergedCandidates, normalizedCandidate);
-    }
+  const searchResults = await searchDiscoverySources({
+    queries,
+    targetLimit: context.job.targetLimit,
+    country: context.job.country,
+    icpProfile: context.icpProfile,
+  });
+  const detectorResults = await detectSearchResults(searchResults, context.job.targetLimit);
+  const searchResultMap = mapSearchResultsByLink(searchResults);
+
+  for (const detectorCandidate of detectorResults) {
+    const searchResult = searchResultMap.get(detectorCandidate.candidate.link);
+    const normalizedCandidate = toNormalizedCandidate(detectorCandidate, searchResult);
+    if (!normalizedCandidate) continue;
+    mergeCandidate(mergedCandidates, normalizedCandidate);
   }
   return Array.from(mergedCandidates.values()).slice(0, context.job.targetLimit * 3);
 }
 
-async function detectQuery(query: string, targetLimit: number) {
-  const searchResults = await searchCompany(query, { num: Math.min(Math.max(targetLimit, 10), 20) });
+async function detectSearchResults(searchResults: DiscoverySearchResult[], targetLimit: number) {
   if (searchResults.length === 0) return [];
-  const detectorResult = await detectOfficialWebsite(query, searchResults, await getDetectorConfig());
+  const detectorInput = searchResults
+    .slice(0, targetLimit * 3)
+    .map(({ title, link, snippet }) => ({ title, link, snippet }));
+  const detectorResult = await detectOfficialWebsite("multi-source-discovery", detectorInput, await getDetectorConfig());
   return detectorResult.allCandidates;
 }
 
-function toNormalizedCandidate(detectorCandidate: DetectorCandidate, searchQuery: string) {
+function mapSearchResultsByLink(searchResults: DiscoverySearchResult[]) {
+  return new Map(searchResults.map((result) => [result.link, result]));
+}
+
+function toNormalizedCandidate(
+  detectorCandidate: DetectorCandidate,
+  searchResult?: DiscoverySearchResult
+) {
   const normalizedUrl = normalizeUrl(detectorCandidate.signals.finalUrl || detectorCandidate.candidate.link);
   const domain = normalizeDomain(normalizedUrl || detectorCandidate.candidate.link);
   const rootDomain = getRootDomain(domain || "");
@@ -126,7 +143,7 @@ function toNormalizedCandidate(detectorCandidate: DetectorCandidate, searchQuery
     url: detectorCandidate.candidate.link,
     finalUrl: normalizedUrl,
     snippet: detectorCandidate.candidate.snippet,
-    searchQuery,
+    searchQuery: searchResult?.query || "",
     domain,
     rootDomain,
     source: "search+detector",
@@ -144,7 +161,17 @@ function toNormalizedCandidate(detectorCandidate: DetectorCandidate, searchQuery
     feedbackScore: 0,
     finalScore: 0,
     decision: "pending" as const,
-    metadata: { detectorRank: detectorCandidate.rank },
+    metadata: buildSearchMetadata(detectorCandidate, searchResult),
+  };
+}
+
+function buildSearchMetadata(detectorCandidate: DetectorCandidate, searchResult?: DiscoverySearchResult) {
+  return {
+    detectorRank: detectorCandidate.rank,
+    sourceProvider: searchResult?.sourceProvider ?? null,
+    queryIntent: searchResult?.queryIntent ?? null,
+    sourceQualityScore: searchResult?.metadata?.sourceQualityScore ?? null,
+    searchSources: searchResult?.metadata?.sources ?? [],
   };
 }
 
@@ -598,6 +625,7 @@ function buildProspectInsertValues(
 ) {
   const contacts = (candidate.contacts || {}) as { emails?: string[] };
   const firstEmail = contacts.emails?.[0] || null;
+  const candidateMetadata = (candidate.metadata || {}) as Record<string, unknown>;
   return {
     tenantId: context.job.tenantId,
     companyName: candidate.companyName || candidate.rootDomain,
@@ -611,18 +639,26 @@ function buildProspectInsertValues(
     companyScore: candidate.detectorScore,
     matchScore: candidate.finalScore,
     metadata: {
+      ...candidateMetadata,
       discoveryJobId: context.job.id,
       discoveryCandidateId: candidate.id,
       icpProfileId: context.job.icpProfileId,
       rootDomain: candidate.rootDomain,
+      discoveryDecision: candidate.decision,
       detectorScore: candidate.detectorScore,
+      detectorDimensions: candidate.detectorDimensions,
       ruleScore: candidate.ruleScore,
       aiScore: candidate.aiScore,
       feedbackScore: candidate.feedbackScore,
       finalScore: candidate.finalScore,
+      discoveryFinalScore: candidate.finalScore,
       evidence: candidate.evidence,
       rejectReasons: candidate.rejectReasons,
       matchedRules: candidate.matchedRules,
+      sourceProvider: candidateMetadata.sourceProvider ?? null,
+      queryIntent: candidateMetadata.queryIntent ?? null,
+      sourceQualityScore: candidateMetadata.sourceQualityScore ?? null,
+      searchSources: candidateMetadata.searchSources ?? [],
     },
   };
 }

@@ -114,6 +114,7 @@ export interface DiscoveryRuleFilterInput {
     "title" | "snippet" | "companyName" | "domain" | "rootDomain"
   > & { rawText: string; pagesFetched: DiscoveryFetchedPage[] };
   icpProfile: DiscoveryIcpProfile;
+  ruleVariant?: "A" | "B";
 }
 
 export interface DiscoveryRuleFilterResult {

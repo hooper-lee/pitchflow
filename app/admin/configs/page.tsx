@@ -39,6 +39,9 @@ const AI_PROMPT_KEYS = {
   PROSPECT_SCORING_SYSTEM: "AI_PROMPT_PROSPECT_SCORING_SYSTEM",
   PROSPECT_RESEARCH_USER: "AI_PROMPT_PROSPECT_RESEARCH_USER",
   PROSPECT_SCORING_USER: "AI_PROMPT_PROSPECT_SCORING_USER",
+  EMAIL_OUTREACH_USER: "AI_PROMPT_EMAIL_OUTREACH_USER",
+  EMAIL_FOLLOWUP_USER: "AI_PROMPT_EMAIL_FOLLOWUP_USER",
+  EMAIL_REPLY_FOLLOWUP_USER: "AI_PROMPT_EMAIL_REPLY_FOLLOWUP_USER",
 };
 
 const SCORING_WEIGHT_KEYS = {
@@ -168,6 +171,37 @@ const AI_PROMPT_SECTION: ConfigSection = {
   ],
 };
 
+const EMAIL_PROMPT_SECTION: ConfigSection = {
+  title: "客户邮件生成提示词",
+  description: "配置三类客户邮件生成提示词：冷启动首封、未回复自动跟进、已回复客户推进",
+  fields: [
+    {
+      key: AI_PROMPT_KEYS.EMAIL_OUTREACH_USER,
+      label: "冷启动首封开发信",
+      secret: false,
+      placeholder: "Write a personalized cold outreach email...",
+      textarea: true,
+      rows: 10,
+    },
+    {
+      key: AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER,
+      label: "冷启动未回复自动跟进",
+      secret: false,
+      placeholder: "Write a follow-up email for a prospect who has not replied...",
+      textarea: true,
+      rows: 10,
+    },
+    {
+      key: AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER,
+      label: "已回复客户推进",
+      secret: false,
+      placeholder: "Write a warm reply-follow-up email based on a real prospect reply...",
+      textarea: true,
+      rows: 10,
+    },
+  ],
+};
+
 const SCORING_WEIGHT_SECTION: ConfigSection = {
   title: "客户评分权重",
   description: "配置综合评分中 5 个维度的权重，建议总和为 100",
@@ -239,6 +273,7 @@ export default function AdminConfigsPage() {
       const sectionsToSave = [
         ...CONFIG_SECTIONS,
         AI_PROMPT_SECTION,
+        EMAIL_PROMPT_SECTION,
         SCORING_WEIGHT_SECTION,
         FOLLOWUP_SETTING_SECTION,
       ];
@@ -450,6 +485,33 @@ export default function AdminConfigsPage() {
                   />
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          <Card className="section-card">
+            <CardHeader>
+              <CardTitle>{EMAIL_PROMPT_SECTION.title}</CardTitle>
+              <CardDescription>{EMAIL_PROMPT_SECTION.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {EMAIL_PROMPT_SECTION.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Textarea
+                    id={field.key}
+                    placeholder={field.placeholder}
+                    value={getValue(field.key)}
+                    rows={field.rows || 4}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                    className="font-mono text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-sm text-muted-foreground">
+                可用占位符包括：{"{prospectName}"}、{"{companyName}"}、{"{industry}"}、{"{country}"}、{"{researchSummary}"}、{"{productName}"}、{"{productDescription}"}、{"{valueProposition}"}、{"{senderName}"}、{"{senderTitle}"}、{"{templateBody}"}、{"{previousEmailBody}"}、{"{replySubject}"}、{"{replyBody}"}、{"{stepNumber}"}、{"{angle}"}。
+              </p>
             </CardContent>
           </Card>
 

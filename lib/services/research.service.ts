@@ -26,10 +26,28 @@ export interface ResearchResult {
 interface ProspectIcpMetadata {
   icpProfileId?: string | null;
   discoveryFinalScore?: number | null;
+  discoveryDecision?: string | null;
   finalScore?: number | null;
+  detectorScore?: number | null;
   ruleScore?: number | null;
   aiScore?: number | null;
   feedbackScore?: number | null;
+  sourceProvider?: string | null;
+  queryIntent?: string | null;
+  sourceQualityScore?: number | null;
+  searchSources?: Array<{
+    provider?: string | null;
+    query?: string | null;
+    intent?: string | null;
+    queryIntent?: string | null;
+    rank?: number | null;
+    rawRank?: number | null;
+    title?: string | null;
+    link?: string | null;
+    qualityScore?: number | null;
+    sourceConfidence?: number | null;
+  }>;
+  detectorDimensions?: Record<string, number>;
   matchedRules?: string[];
   rejectReasons?: string[];
   icpProfile?: {
@@ -49,9 +67,30 @@ function formatList(values?: string[]) {
   return values?.filter(Boolean).join(", ") || "N/A";
 }
 
+function formatSearchSources(sources?: ProspectIcpMetadata["searchSources"]) {
+  if (!sources?.length) return "N/A";
+  return sources
+    .slice(0, 5)
+    .map((source) => {
+      const label = source.title || source.link || source.query || "Untitled source";
+      const intent = source.intent || source.queryIntent || "N/A";
+      const quality = source.qualityScore ?? source.sourceConfidence ?? "N/A";
+      const rank = source.rank ?? source.rawRank ?? "N/A";
+      return `${label} | provider=${source.provider || "N/A"} | intent=${intent} | rank=${rank} | quality=${quality}`;
+    })
+    .join("\n");
+}
+
+function formatDetectorDimensions(dimensions?: Record<string, number>) {
+  if (!dimensions) return "N/A";
+  const entries = Object.entries(dimensions);
+  if (entries.length === 0) return "N/A";
+  return entries.map(([key, value]) => `${key}: ${value}`).join(", ");
+}
+
 function buildIcpScoringContext(metadata: Record<string, unknown> | null | undefined) {
   const icpMetadata = metadata as ProspectIcpMetadata | null | undefined;
-  if (!icpMetadata?.icpProfileId && !icpMetadata?.icpProfile) {
+  if (!icpMetadata?.icpProfileId && !icpMetadata?.icpProfile && !icpMetadata?.sourceProvider) {
     return "N/A";
   }
 
@@ -65,10 +104,17 @@ function buildIcpScoringContext(metadata: Record<string, unknown> | null | undef
     `Negative Keywords: ${formatList(profile.negativeKeywords)}`,
     `Product Categories: ${formatList(profile.productCategories)}`,
     `Sales Model: ${profile.salesModel || "N/A"}`,
+    `Discovery Decision: ${icpMetadata.discoveryDecision || "N/A"}`,
+    `Detector Score: ${icpMetadata.detectorScore ?? "N/A"}`,
     `Discovery Final Score: ${icpMetadata.discoveryFinalScore ?? icpMetadata.finalScore ?? "N/A"}`,
     `Rule Score: ${icpMetadata.ruleScore ?? "N/A"}`,
     `AI Score: ${icpMetadata.aiScore ?? "N/A"}`,
     `Feedback Score: ${icpMetadata.feedbackScore ?? "N/A"}`,
+    `Source Provider: ${icpMetadata.sourceProvider || "N/A"}`,
+    `Query Intent: ${icpMetadata.queryIntent || "N/A"}`,
+    `Source Quality Score: ${icpMetadata.sourceQualityScore ?? "N/A"}`,
+    `Detector Dimensions: ${formatDetectorDimensions(icpMetadata.detectorDimensions)}`,
+    `Search Sources:\n${formatSearchSources(icpMetadata.searchSources)}`,
     `Matched Rules: ${formatList(icpMetadata.matchedRules)}`,
     `Rejected Signals: ${formatList(icpMetadata.rejectReasons)}`,
     `Extra ICP Instructions: ${profile.promptTemplate || "N/A"}`,
@@ -461,6 +507,7 @@ export async function executeProspectResearch(
       existingResearch: input.existingResearch || "N/A",
       websiteContent: input.websiteContent || "N/A",
       searchResults: input.searchResults || "N/A",
+      icpContext: buildIcpScoringContext(prospect.metadata),
     });
 
     if (resolvedProvider === "openai") {

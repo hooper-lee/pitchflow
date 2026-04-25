@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, lt, desc } from "drizzle-orm";
-import { getAIProviderWithConfig, buildFollowupPrompt } from "@/lib/ai";
+import { getAIProviderWithConfig, buildFollowupPromptFromTemplate } from "@/lib/ai";
 import { db } from "@/lib/db";
 import {
   campaigns,
@@ -9,7 +9,12 @@ import {
   prospects,
 } from "@/lib/db/schema";
 import { submitEmailEngineMessage } from "@/lib/integrations/emailengine";
-import { getFollowupSettings } from "@/lib/services/config.service";
+import {
+  AI_PROMPT_KEYS,
+  getAiPromptConfig,
+  getFollowupSettings,
+  interpolatePromptTemplate,
+} from "@/lib/services/config.service";
 import { getMailAccountById } from "@/lib/services/mail-account.service";
 import { getProductProfile } from "@/lib/services/product-profile.service";
 
@@ -132,21 +137,22 @@ export async function processPendingFollowups() {
             campaign.aiProvider || "custom",
             campaign.aiConfig as { baseURL?: string; apiKey?: string; model?: string } | undefined
           );
+          const promptTemplate = await getAiPromptConfig(AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER);
           const generatedEmail = await ai.generateEmail({
-            prompt: buildFollowupPrompt({
+            prompt: buildFollowupPromptFromTemplate(interpolatePromptTemplate(promptTemplate, {
               prospectName: prospect.contactName || "there",
               companyName: prospect.companyName || "your company",
               industry: prospect.industry || "",
               country: prospect.country || "",
               productName: productProfile.productName,
-              productDescription: productProfile.productDescription || undefined,
-              valueProposition: productProfile.valueProposition || undefined,
+              productDescription: productProfile.productDescription || "",
+              valueProposition: productProfile.valueProposition || "",
               senderName: productProfile.senderName,
-              senderTitle: productProfile.senderTitle || undefined,
+              senderTitle: productProfile.senderTitle || "",
               angle: step.angle || "value_prop",
               previousEmailBody: previousEmail.body || "",
               stepNumber: step.stepNumber,
-            }),
+            })),
           });
 
           const [followupEmail] = await db

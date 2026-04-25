@@ -9,14 +9,22 @@ import {
   campaignProspects,
 } from "@/lib/db/schema";
 import { eq, and, desc, count, inArray } from "drizzle-orm";
-import { getAIProviderWithConfig, buildOutreachPrompt } from "@/lib/ai";
+import {
+  getAIProviderWithConfig,
+  buildOutreachPromptFromTemplate,
+  buildReplyFollowupPromptFromTemplate,
+} from "@/lib/ai";
 import { submitEmailEngineMessage } from "@/lib/integrations/emailengine";
 import {
   getMailAccountById,
   getUserMailAccountByRegisteredEmail,
 } from "@/lib/services/mail-account.service";
 import { getProductProfile } from "@/lib/services/product-profile.service";
-import { buildReplyFollowupPrompt } from "@/lib/ai";
+import {
+  AI_PROMPT_KEYS,
+  getAiPromptConfig,
+  interpolatePromptTemplate,
+} from "@/lib/services/config.service";
 
 interface CreateCampaignParams {
   name: string;
@@ -503,27 +511,29 @@ async function buildCampaignEmailPrompt(input: {
     companyName: input.prospect.companyName || "your company",
     industry: input.prospect.industry || "",
     country: input.prospect.country || "",
-    researchSummary: input.prospect.researchSummary || undefined,
+    researchSummary: input.prospect.researchSummary || "",
     productName: input.template?.productName || input.productProfile.productName,
-    productDescription: input.productProfile.productDescription || undefined,
-    valueProposition: input.productProfile.valueProposition || undefined,
+    productDescription: input.productProfile.productDescription || "",
+    valueProposition: input.productProfile.valueProposition || "",
     senderName: input.template?.senderName || input.productProfile.senderName,
-    senderTitle: input.productProfile.senderTitle || undefined,
-    angle: input.template?.angle || undefined,
-    templateBody: input.template?.body || undefined,
+    senderTitle: input.productProfile.senderTitle || "",
+    angle: input.template?.angle || "",
+    templateBody: input.template?.body || "",
   };
 
   if (input.campaign.campaignType !== "reply_followup") {
-    return buildOutreachPrompt(commonInput);
+    const template = await getAiPromptConfig(AI_PROMPT_KEYS.EMAIL_OUTREACH_USER);
+    return buildOutreachPromptFromTemplate(interpolatePromptTemplate(template, commonInput));
   }
 
   const replyContext = await getLatestReplyForProspect(input.prospect.id);
-  return buildReplyFollowupPrompt({
+  const template = await getAiPromptConfig(AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER);
+  return buildReplyFollowupPromptFromTemplate(interpolatePromptTemplate(template, {
     ...commonInput,
-    previousEmailBody: replyContext?.previousEmailBody || undefined,
+    previousEmailBody: replyContext?.previousEmailBody || "",
     replyBody: replyContext?.replyBody || input.prospect.researchSummary || "",
-    replySubject: replyContext?.replySubject || undefined,
-  });
+    replySubject: replyContext?.replySubject || "",
+  }));
 }
 
 async function getLatestReplyForProspect(prospectId: string) {

@@ -104,6 +104,15 @@ ${params.templateBody ? `\nUse this template as a guide but personalize heavily:
 ${EMAIL_JSON_OUTPUT_RULES}`;
 }
 
+export function buildOutreachPromptFromTemplate(userPromptTemplate: string): string {
+  return `${COMMON_EMAIL_SKILL}
+${OUTREACH_EMAIL_SKILL}
+
+${userPromptTemplate}
+
+${EMAIL_JSON_OUTPUT_RULES}`;
+}
+
 export function buildFollowupPrompt(
   params: EmailGenerationParams & { previousEmailBody: string; stepNumber: number }
 ): string {
@@ -130,6 +139,15 @@ ${params.previousEmailBody}
 ---
 
 ${params.angle ? `Angle: ${ANGLE_PROMPTS[params.angle] || ANGLE_PROMPTS.value_prop}` : "Angle: value_prop"}
+
+${EMAIL_JSON_OUTPUT_RULES}`;
+}
+
+export function buildFollowupPromptFromTemplate(userPromptTemplate: string): string {
+  return `${COMMON_EMAIL_SKILL}
+${FOLLOWUP_EMAIL_SKILL}
+
+${userPromptTemplate}
 
 ${EMAIL_JSON_OUTPUT_RULES}`;
 }
@@ -169,6 +187,15 @@ Prospect reply${params.replySubject ? ` (${params.replySubject})` : ""}:
 ---
 ${params.replyBody}
 ---
+
+${EMAIL_JSON_OUTPUT_RULES}`;
+}
+
+export function buildReplyFollowupPromptFromTemplate(userPromptTemplate: string): string {
+  return `${COMMON_EMAIL_SKILL}
+${REPLY_FOLLOWUP_EMAIL_SKILL}
+
+${userPromptTemplate}
 
 ${EMAIL_JSON_OUTPUT_RULES}`;
 }

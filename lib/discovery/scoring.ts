@@ -24,6 +24,9 @@ export function calculateDiscoveryDecision(input: {
   if (input.ruleResult.hardReject) return toDecisionResult(0, "rejected", input.feedbackScore);
 
   const finalScore = calculateFinalScore(input);
+  if (hasUncertainSource(input.ruleResult) && finalScore >= input.icpProfile.minScoreToReview) {
+    return toDecisionResult(finalScore, "needs_review", input.feedbackScore);
+  }
   if (finalScore >= input.icpProfile.minScoreToSave) {
     return toDecisionResult(finalScore, "accepted", input.feedbackScore);
   }
@@ -76,6 +79,14 @@ function toDecisionResult(
   feedbackScore: number
 ): DiscoveryDecisionResult {
   return { finalScore, decision, feedbackScore };
+}
+
+function hasUncertainSource(ruleResult: DiscoveryRuleFilterResult) {
+  return ruleResult.rejectReasons.some(isUncertainSourceReason);
+}
+
+function isUncertainSourceReason(reason: string) {
+  return reason.startsWith("uncertain_source") || reason.startsWith("uncertain source");
 }
 
 function normalizeWeights(rawWeights?: Partial<Record<string, number>>) {

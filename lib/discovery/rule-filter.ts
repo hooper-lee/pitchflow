@@ -5,10 +5,40 @@ import type {
   DiscoveryRuleFilterResult,
 } from "./types";
 
+const UNCERTAIN_SOURCE_SIGNALS = [
+  "blog article",
+  "article about",
+  "directory",
+  "directory page",
+  "marketplace",
+  "marketplace category",
+  "review article",
+  "research article",
+  "social profile",
+  "news about",
+  "news page",
+  "affiliate guide",
+  "retailer carries",
+  "retailer sells",
+  "retail store carries",
+  "distributor",
+  "distributor sells",
+  "ownership is unclear",
+  "brand ownership is unclear",
+  "consulting firm",
+  "interior design studio",
+  "industry association",
+  "association page",
+  "veterinary clinic",
+  "influencer page",
+];
+
 export function runRuleFilter({
   candidate,
   icpProfile,
+  ruleVariant,
 }: DiscoveryRuleFilterInput): DiscoveryRuleFilterResult {
+  const activeVariant = resolveRuleVariant(ruleVariant);
   const searchableText = buildSearchableText(candidate);
   const matchedRules: string[] = [];
   const rejectReasons: string[] = [];
@@ -21,6 +51,9 @@ export function runRuleFilter({
   ruleScore += scoreMustHave(icpProfile.mustHave, searchableText, matchedRules, evidence);
   hardReject = scoreMustNotHave(icpProfile.mustNotHave, searchableText, rejectReasons, evidence);
   ruleScore += scoreProductCategories(icpProfile.productCategories, searchableText, matchedRules, evidence);
+  if (activeVariant === "B") {
+    ruleScore -= scoreUncertainSourceSignals(searchableText, rejectReasons, evidence);
+  }
 
   return {
     ruleScore: clampScore(ruleScore),
@@ -29,6 +62,11 @@ export function runRuleFilter({
     evidence,
     hardReject,
   };
+}
+
+function resolveRuleVariant(ruleVariant?: DiscoveryRuleFilterInput["ruleVariant"]) {
+  if (ruleVariant) return ruleVariant;
+  return process.env.DISCOVERY_RULE_VARIANT === "A" ? "A" : "B";
 }
 
 function buildSearchableText(input: DiscoveryRuleFilterInput["candidate"]) {
@@ -103,6 +141,20 @@ function scoreProductCategories(
     matchedRules.push(`product:${normalized}`);
     pushEvidence(evidence, "product", searchableText, normalized, "matches preferred category");
     return score + 6;
+  }, 0);
+}
+
+function scoreUncertainSourceSignals(
+  searchableText: string,
+  rejectReasons: string[],
+  evidence: DiscoveryEvidence[]
+) {
+  return UNCERTAIN_SOURCE_SIGNALS.reduce((score, signal) => {
+    if (!containsKeyword(searchableText, signal)) return score;
+    const reason = `uncertain_source:${normalizeKeyword(signal)}`;
+    rejectReasons.push(reason);
+    pushEvidence(evidence, "source_quality", searchableText, signal, "source is not clearly an official target company site");
+    return score + 40;
   }, 0);
 }
 
