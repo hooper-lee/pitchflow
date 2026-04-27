@@ -9,7 +9,7 @@ import {
   Mail,
   Send,
   RefreshCw,
-  Bell,
+  Bot,
   ArrowRight,
   Check,
 } from "lucide-react";
@@ -41,9 +41,9 @@ const features = [
     desc: "围绕首封邮件自动安排 3 / 7 / 14 天跟进，客户回复后停止后续自动触达。",
   },
   {
-    icon: Bell,
-    title: "客户回复消息追踪",
-    desc: "客户回复后自动推送到账号邮箱、飞书或企业微信，并携带公司、活动和回复摘要。",
+    icon: Bot,
+    title: "云端数字员工",
+    desc: "用自然语言完成配置体检、产品资料整理、ICP 创建、客户挖掘和活动状态查询。",
   },
 ];
 
@@ -51,18 +51,18 @@ const plans = [
   {
     name: "Free",
     price: "免费",
-    features: ["50 个客户/月", "100 封邮件/月", "1 个活动", "3 个模板", "1 名成员", "1 轮跟进", "邮件告警"],
+    features: ["50 个客户/月", "100 封邮件/月", "1 个活动", "3 个模板", "1 名成员", "Agent 基础对话", "配置体检"],
   },
   {
     name: "Pro",
     price: "¥299/月",
     popular: true,
-    features: ["2,000 个客户/月", "10,000 封邮件/月", "20 个活动", "无限模板", "5 名成员", "3 轮跟进", "邮件附件", "自定义 AI 模型", "飞书+企微告警", "API 访问"],
+    features: ["2,000 个客户/月", "10,000 封邮件/月", "20 个活动", "无限模板", "5 名成员", "Agent 工作流", "ICP 与挖掘任务", "邮件草稿", "飞书+企微通知", "API 访问"],
   },
   {
     name: "Enterprise",
     price: "定制",
-    features: ["无限客户", "无限邮件", "无限活动", "无限模板", "无限成员", "无限轮跟进", "邮件附件", "自定义 AI 模型", "全渠道告警", "API 访问", "专属客服"],
+    features: ["无限客户", "无限邮件", "无限活动", "无限模板", "无限成员", "专属 Agent Credits", "MCP Gateway", "自定义 Toolkit", "全渠道协作", "审计导出", "专属支持"],
   },
 ];
 
@@ -230,7 +230,7 @@ export function MarketingHome() {
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4">六大核心能力</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              从 ICP 精准挖掘、AI 调研、邮件生成到跟进节奏管理，把外贸开发流程收敛到一套系统里。
+              从 ICP 精准挖掘、AI 调研、邮件生成到云端数字员工，把外贸开发流程收敛到一套系统里。
             </p>
           </div>
 
@@ -258,6 +258,40 @@ export function MarketingHome() {
           <div className="grid gap-8 lg:grid-cols-2">
             <DiscoveryDemo />
             <ResearchDemo />
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-4xl rounded-lg border bg-card p-8">
+            <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+              <div>
+                <div className="mb-4 inline-flex items-center rounded-full border px-3 py-1 text-sm text-muted-foreground">
+                  Hemera Agent Platform
+                </div>
+                <h2 className="text-3xl font-bold tracking-tight">
+                  让 PitchFlow 成为数字员工的外贸获客工具包
+                </h2>
+                <p className="mt-4 text-muted-foreground">
+                  用户不需要记住每个页面在哪里。Agent 会理解目标、追问缺失信息，并在权限范围内调用 PitchFlow 完成配置、挖掘、总结和草稿创建。
+                </p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="space-y-3 text-sm">
+                  <div className="w-fit rounded-lg bg-background px-4 py-3 shadow-sm">
+                    帮我找 50 个美国宠物用品 DTC 品牌
+                  </div>
+                  <div className="ml-auto w-fit max-w-[90%] rounded-lg bg-primary px-4 py-3 text-primary-foreground shadow-sm">
+                    我会创建精准挖掘任务，并使用 ICP / 搜索意图 / 官网评分筛选候选客户。
+                  </div>
+                  <div className="rounded-lg border bg-background p-4">
+                    <p className="font-medium">任务已创建：美国宠物用品 DTC 品牌</p>
+                    <p className="mt-1 text-muted-foreground">状态：搜索中 · 目标数量：50 · 后续可继续让我总结候选池</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -307,7 +341,7 @@ export function MarketingHome() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">准备好让客户开发流程更清晰了吗？</h2>
           <p className="text-lg opacity-80 mb-8 max-w-2xl mx-auto">
-            用一套系统统一客户筛选、AI 开发信和跟进节奏，而不是继续靠零散工具拼流程。
+            用一套系统统一客户筛选、AI 开发信、跟进节奏和数字员工协作，而不是继续靠零散工具拼流程。
           </p>
           <Link href="/register">
             <Button size="lg" variant="secondary" className="text-lg px-8">
@@ -320,7 +354,7 @@ export function MarketingHome() {
 
       <footer className="py-8 border-t">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>PitchFlow — AI 驱动的外贸智能获客平台</p>
+          <p>PitchFlow — Hemera 数字员工的外贸智能获客 Toolkit</p>
         </div>
       </footer>
     </div>
