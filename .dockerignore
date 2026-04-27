@@ -2,6 +2,7 @@ node_modules
 .next
 .git
 output
+data/eval
 docs/sop-assets
 .env.local
 .env.production

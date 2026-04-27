@@ -14,7 +14,11 @@
     "seed": "npx tsx scripts/seed.ts",
     "eval:discovery-search": "tsx scripts/eval-discovery-search.ts",
     "eval:icp-classifier": "tsx scripts/eval-icp-classifier.ts",
-    "eval:icp-ab": "tsx scripts/eval-icp-classifier.ts --ab"
+    "eval:icp-ab": "tsx scripts/eval-icp-classifier.ts --ab",
+    "eval:email-template": "tsx scripts/eval-email-template.ts",
+    "eval:email-template-ab": "tsx scripts/eval-email-template.ts --ab",
+    "eval:email-qa": "tsx scripts/eval-email-template.ts --ab",
+    "eval:all-local": "npm run eval:icp-ab && npm run eval:discovery-search && npm run eval:email-template-ab"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",

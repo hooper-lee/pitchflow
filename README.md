@@ -285,9 +285,11 @@ Cheerio 批量抓取页面（Playwright 可选兜底）
 ```bash
 npm run eval:icp-ab
 npm run eval:discovery-search
+npm run eval:email-template-ab
+npm run eval:all-local
 ```
 
-说明：Golden Set 才能计算准确率 / 召回率；真实搜索抽样没有人工标签，只能用于检查搜索源和规则差异。
+说明：Golden Set 才能计算准确率 / 召回率；真实搜索抽样没有人工标签，只能用于检查搜索源和规则差异。`data/eval` 和 `output` 属于本地评测资产，已在 `.dockerignore` 中排除，不进入生产 Docker 镜像。
 
 ## 调研与发信规则
 

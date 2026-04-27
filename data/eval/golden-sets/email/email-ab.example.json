@@ -1,0 +1,175 @@
+{
+  "name": "PitchFlow Email A/B Quick Start",
+  "industries": [
+    {
+      "industry": "Pet Supplies",
+      "targetCustomer": "DTC pet supplies brand",
+      "prospectCompany": "PawTrail Co.",
+      "contactName": "Sarah",
+      "productName": "OEM pet harness and leash sets",
+      "valueProposition": "low MOQ, custom colors, fast sampling, stable export quality",
+      "requiredTerms": ["pet", "harness", "custom", "low MOQ"],
+      "forbiddenClaims": ["cat food", "FDA approved", "Walmart supplier"]
+    },
+    {
+      "industry": "Home Goods",
+      "targetCustomer": "design-led home goods brand",
+      "prospectCompany": "NestForma",
+      "contactName": "Megan",
+      "productName": "custom home storage and tabletop products",
+      "valueProposition": "material options, flexible MOQ, packaging customization, reliable delivery",
+      "requiredTerms": ["home", "design", "custom", "MOQ"],
+      "forbiddenClaims": ["Wayfair supplier", "guaranteed bestseller", "founded in 1998"]
+    },
+    {
+      "industry": "Outdoor Gear",
+      "targetCustomer": "camping gear brand",
+      "prospectCompany": "TrailPeak Gear",
+      "contactName": "Ryan",
+      "productName": "custom camping accessories",
+      "valueProposition": "durable materials, sample support, private label options",
+      "requiredTerms": ["outdoor", "camping", "custom", "sample"],
+      "forbiddenClaims": ["REI partner", "military certified", "waterproof guarantee"]
+    },
+    {
+      "industry": "Beauty Personal Care",
+      "targetCustomer": "DTC skincare brand",
+      "prospectCompany": "GlowMira",
+      "contactName": "Emily",
+      "productName": "custom beauty packaging and accessories",
+      "valueProposition": "brand-ready packaging, low MOQ, compliant material documentation",
+      "requiredTerms": ["beauty", "packaging", "custom", "compliant"],
+      "forbiddenClaims": ["FDA approved", "cures acne", "clinical proof"]
+    },
+    {
+      "industry": "Apparel Accessories",
+      "targetCustomer": "activewear and accessories brand",
+      "prospectCompany": "MotionThread",
+      "contactName": "Alex",
+      "productName": "OEM hats, bags, and apparel accessories",
+      "valueProposition": "fabric sourcing, sampling, logo customization, export delivery",
+      "requiredTerms": ["apparel", "sample", "fabric", "custom"],
+      "forbiddenClaims": ["Nike supplier", "guaranteed viral", "luxury certified"]
+    },
+    {
+      "industry": "Baby Products",
+      "targetCustomer": "baby products brand",
+      "prospectCompany": "LittleNest Baby",
+      "contactName": "Olivia",
+      "productName": "custom nursery accessories",
+      "valueProposition": "safe material documentation, careful packaging, flexible MOQ",
+      "requiredTerms": ["baby", "nursery", "material", "MOQ"],
+      "forbiddenClaims": ["child-safe certified", "FDA approved", "prevents injury"]
+    },
+    {
+      "industry": "Consumer Electronics Accessories",
+      "targetCustomer": "phone accessories brand",
+      "prospectCompany": "VoltCase",
+      "contactName": "Daniel",
+      "productName": "custom phone cases and charging accessories",
+      "valueProposition": "tooling support, packaging customization, quality checks",
+      "requiredTerms": ["phone", "accessories", "custom", "quality"],
+      "forbiddenClaims": ["Apple certified", "BestBuy supplier", "zero defect guarantee"]
+    },
+    {
+      "industry": "Automotive Aftermarket",
+      "targetCustomer": "car accessories brand",
+      "prospectCompany": "DriveForge",
+      "contactName": "Chris",
+      "productName": "custom automotive accessories",
+      "valueProposition": "fitment support, packaging customization, stable export supply",
+      "requiredTerms": ["automotive", "accessories", "fitment", "supply"],
+      "forbiddenClaims": ["AutoZone partner", "DOT certified", "guaranteed performance gain"]
+    },
+    {
+      "industry": "Packaging Materials",
+      "targetCustomer": "eco packaging buyer",
+      "prospectCompany": "EcoSip Foods",
+      "contactName": "Laura",
+      "productName": "sustainable food packaging",
+      "valueProposition": "recyclable materials, capacity planning, documentation support",
+      "requiredTerms": ["packaging", "recyclable", "capacity", "documentation"],
+      "forbiddenClaims": ["100% compostable certified", "FDA approved", "Alibaba supplier"]
+    },
+    {
+      "industry": "Food Beverage",
+      "targetCustomer": "tea and coffee brand",
+      "prospectCompany": "BrewLeaf",
+      "contactName": "Nina",
+      "productName": "custom beverage packaging and gift sets",
+      "valueProposition": "retail-ready packaging, low MOQ, fast sampling",
+      "requiredTerms": ["beverage", "packaging", "sampling", "MOQ"],
+      "forbiddenClaims": ["improves health", "FDA approved", "restaurant chain"]
+    },
+    {
+      "industry": "Furniture",
+      "targetCustomer": "office furniture buyer",
+      "prospectCompany": "WorkHaven",
+      "contactName": "Jason",
+      "productName": "custom furniture components",
+      "valueProposition": "material options, custom sizing, delivery planning",
+      "requiredTerms": ["furniture", "material", "custom", "delivery"],
+      "forbiddenClaims": ["Wayfair supplier", "lifetime guarantee", "patented design"]
+    },
+    {
+      "industry": "Fitness Wellness",
+      "targetCustomer": "sports recovery brand",
+      "prospectCompany": "Recoverly",
+      "contactName": "Hannah",
+      "productName": "custom recovery accessories",
+      "valueProposition": "sample support, durable materials, private label packaging",
+      "requiredTerms": ["fitness", "recovery", "sample", "private label"],
+      "forbiddenClaims": ["medical grade", "cures pain", "Amazon bestseller"]
+    },
+    {
+      "industry": "Promotional Gifts",
+      "targetCustomer": "corporate gifts distributor",
+      "prospectCompany": "GiftPilot",
+      "contactName": "Mark",
+      "productName": "custom logo promotional gifts",
+      "valueProposition": "logo customization, delivery timeline control, flexible SKU options",
+      "requiredTerms": ["gifts", "logo", "custom", "delivery"],
+      "forbiddenClaims": ["guaranteed lowest price", "Fortune 500 supplier", "trade show winner"]
+    },
+    {
+      "industry": "Industrial Parts",
+      "targetCustomer": "equipment parts buyer",
+      "prospectCompany": "AxisWorks",
+      "contactName": "Victor",
+      "productName": "custom mechanical components",
+      "valueProposition": "drawing review, stable supply, specification alignment",
+      "requiredTerms": ["industrial", "components", "specification", "supply"],
+      "forbiddenClaims": ["Thomasnet verified", "military grade", "zero failure guarantee"]
+    },
+    {
+      "industry": "Healthcare Supplies",
+      "targetCustomer": "healthcare supplies buyer",
+      "prospectCompany": "CareLoop Supply",
+      "contactName": "Rachel",
+      "productName": "healthcare supply packaging and accessories",
+      "valueProposition": "documentation support, cautious claims, stable delivery",
+      "requiredTerms": ["healthcare", "documentation", "supply", "delivery"],
+      "forbiddenClaims": ["medical certified", "FDA approved", "prevents infection"]
+    },
+    {
+      "industry": "Gardening Supplies",
+      "targetCustomer": "garden tools brand",
+      "prospectCompany": "GrowCraft",
+      "contactName": "Ben",
+      "productName": "custom gardening tools and accessories",
+      "valueProposition": "private label options, packaging support, durable materials",
+      "requiredTerms": ["gardening", "tools", "private label", "materials"],
+      "forbiddenClaims": ["Home Depot supplier", "patented material", "Pinterest viral"]
+    }
+  ],
+  "scenarioCounts": {
+    "cold_outreach": 10,
+    "no_reply_followup": 3,
+    "reply_followup": 2,
+    "high_intent_reply": 1,
+    "low_intent_reply": 1,
+    "pricing_reply": 1,
+    "rejection_reply": 1,
+    "out_of_office_reply": 1
+  }
+}
