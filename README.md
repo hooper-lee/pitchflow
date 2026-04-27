@@ -148,8 +148,10 @@ cp .env.production.example .env.production
 - `CRON_SECRET`
 - `EMAILENGINE_WEBHOOK_BASE_URL`
 - `EMAILENGINE_INTERNAL_SECRET`
+- `EENGINE_SECRET`（与 `EMAILENGINE_INTERNAL_SECRET` 保持一致）
 - `EMAILENGINE_ACCESS_TOKEN`
 - `EMAILENGINE_PREPARED_TOKEN`
+- `EENGINE_PREPARED_TOKEN`（与 `EMAILENGINE_PREPARED_TOKEN` 保持一致）
 - `CUSTOM_AI_BASE_URL`
 - `CUSTOM_AI_API_KEY`
 - `CUSTOM_AI_MODEL`
@@ -175,7 +177,7 @@ docker run --rm --network host \
   emailengine tokens export --scope api
 ```
 
-把输出内容填进 `EMAILENGINE_PREPARED_TOKEN`。
+把输出内容同时填进 `EMAILENGINE_PREPARED_TOKEN` 和 `EENGINE_PREPARED_TOKEN`。`EMAILENGINE_INTERNAL_SECRET` 和 `EENGINE_SECRET` 也保持一致：前者给 PitchFlow 应用读取，后者由 EmailEngine 容器直接读取。
 
 然后正常启动：
 
