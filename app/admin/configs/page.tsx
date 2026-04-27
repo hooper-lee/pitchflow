@@ -42,6 +42,10 @@ const AI_PROMPT_KEYS = {
   EMAIL_OUTREACH_USER: "AI_PROMPT_EMAIL_OUTREACH_USER",
   EMAIL_FOLLOWUP_USER: "AI_PROMPT_EMAIL_FOLLOWUP_USER",
   EMAIL_REPLY_FOLLOWUP_USER: "AI_PROMPT_EMAIL_REPLY_FOLLOWUP_USER",
+  AGENT_PLANNER_SYSTEM: "AI_PROMPT_AGENT_PLANNER_SYSTEM",
+  AGENT_PLANNER_USER: "AI_PROMPT_AGENT_PLANNER_USER",
+  AGENT_RESULT_SUMMARY_SYSTEM: "AI_PROMPT_AGENT_RESULT_SUMMARY_SYSTEM",
+  AGENT_RESULT_SUMMARY_USER: "AI_PROMPT_AGENT_RESULT_SUMMARY_USER",
 };
 
 const SCORING_WEIGHT_KEYS = {
@@ -202,6 +206,45 @@ const EMAIL_PROMPT_SECTION: ConfigSection = {
   ],
 };
 
+const AGENT_PROMPT_SECTION: ConfigSection = {
+  title: "数字员工提示词",
+  description: "配置站内 Agent 的目标识别、业务事实抽取和工具结果总结提示词",
+  fields: [
+    {
+      key: AI_PROMPT_KEYS.AGENT_PLANNER_SYSTEM,
+      label: "目标识别系统提示词",
+      secret: false,
+      placeholder: "Return exactly ONE valid JSON object...",
+      textarea: true,
+      rows: 6,
+    },
+    {
+      key: AI_PROMPT_KEYS.AGENT_PLANNER_USER,
+      label: "目标识别用户提示词模板",
+      secret: false,
+      placeholder: "Classify the user's request into a high-level business goal...",
+      textarea: true,
+      rows: 10,
+    },
+    {
+      key: AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_SYSTEM,
+      label: "工具结果总结系统提示词",
+      secret: false,
+      placeholder: "Answer only in concise Chinese...",
+      textarea: true,
+      rows: 5,
+    },
+    {
+      key: AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_USER,
+      label: "工具结果总结用户提示词模板",
+      secret: false,
+      placeholder: "Summarize this Agent tool execution result...",
+      textarea: true,
+      rows: 8,
+    },
+  ],
+};
+
 const SCORING_WEIGHT_SECTION: ConfigSection = {
   title: "客户评分权重",
   description: "配置综合评分中 5 个维度的权重，建议总和为 100",
@@ -274,6 +317,7 @@ export default function AdminConfigsPage() {
         ...CONFIG_SECTIONS,
         AI_PROMPT_SECTION,
         EMAIL_PROMPT_SECTION,
+        AGENT_PROMPT_SECTION,
         SCORING_WEIGHT_SECTION,
         FOLLOWUP_SETTING_SECTION,
       ];
@@ -511,6 +555,33 @@ export default function AdminConfigsPage() {
               ))}
               <p className="text-sm text-muted-foreground">
                 可用占位符包括：{"{prospectName}"}、{"{companyName}"}、{"{industry}"}、{"{country}"}、{"{researchSummary}"}、{"{productName}"}、{"{productDescription}"}、{"{valueProposition}"}、{"{senderName}"}、{"{senderTitle}"}、{"{templateBody}"}、{"{previousEmailBody}"}、{"{replySubject}"}、{"{replyBody}"}、{"{stepNumber}"}、{"{angle}"}。
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="section-card">
+            <CardHeader>
+              <CardTitle>{AGENT_PROMPT_SECTION.title}</CardTitle>
+              <CardDescription>{AGENT_PROMPT_SECTION.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {AGENT_PROMPT_SECTION.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Textarea
+                    id={field.key}
+                    placeholder={field.placeholder}
+                    value={getValue(field.key)}
+                    rows={field.rows || 4}
+                    onChange={(event) =>
+                      setConfigs((prev) => ({ ...prev, [field.key]: event.target.value }))
+                    }
+                    className="font-mono text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-sm text-muted-foreground">
+                目标识别可用占位符：{"{intentCatalog}"}、{"{message}"}。结果总结可用占位符：{"{userMessage}"}、{"{intent}"}、{"{toolResults}"}。
               </p>
             </CardContent>
           </Card>

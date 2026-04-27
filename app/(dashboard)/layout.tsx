@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { AgentPanel } from "@/components/agent/agent-panel";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
           <div className="mx-auto max-w-[1440px]">{children}</div>
         </main>
       </div>
+      <AgentPanel />
     </div>
   );
 }

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "prospect_research_prospect_unique" ON "prospect_research" USING btree ("prospect_id");

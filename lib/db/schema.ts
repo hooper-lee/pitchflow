@@ -118,6 +118,50 @@ export const blocklistScopeEnum = pgEnum("blocklist_scope", [
   "user",
   "icp_profile",
 ]);
+export const agentChannelEnum = pgEnum("agent_channel", [
+  "web",
+  "feishu",
+  "wecom",
+  "api",
+]);
+export const agentMessageRoleEnum = pgEnum("agent_message_role", [
+  "system",
+  "user",
+  "assistant",
+  "tool",
+]);
+export const agentRunStatusEnum = pgEnum("agent_run_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "requires_approval",
+]);
+export const agentToolCallStatusEnum = pgEnum("agent_tool_call_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "blocked",
+  "requires_approval",
+]);
+export const agentRiskLevelEnum = pgEnum("agent_risk_level", [
+  "low",
+  "medium",
+  "high",
+]);
+export const agentUsageTypeEnum = pgEnum("agent_usage_type", [
+  "model",
+  "tool",
+  "conversation",
+]);
+export const agentApprovalStatusEnum = pgEnum("agent_approval_status", [
+  "pending",
+  "approved",
+  "rejected",
+  "expired",
+]);
 
 // ── Tables ─────────────────────────────────────────────
 
@@ -201,6 +245,249 @@ export const verificationTokens = pgTable(
     compoundPk: uniqueIndex("verification_tokens_identifier_token_unique").on(
       table.identifier,
       table.token
+    ),
+  })
+);
+
+// ── Agent platform tables ──────────────────────────────
+
+export const agents = pgTable(
+  "agents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    systemPrompt: text("system_prompt"),
+    modelProvider: varchar("model_provider", { length: 100 }),
+    modelConfig: jsonb("model_config").$type<Record<string, unknown>>().default({}).notNull(),
+    enabledToolkits: jsonb("enabled_toolkits").$type<string[]>().default([]).notNull(),
+    enabledTools: jsonb("enabled_tools").$type<string[]>().default([]).notNull(),
+    approvalPolicy: jsonb("approval_policy").$type<Record<string, unknown>>().default({}).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agents_tenant_idx").on(table.tenantId),
+    createdByIdx: index("agents_created_by_idx").on(table.createdBy),
+    activeIdx: index("agents_active_idx").on(table.isActive),
+  })
+);
+
+export const agentConversations = pgTable(
+  "agent_conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    channel: agentChannelEnum("channel").default("web").notNull(),
+    channelConversationId: varchar("channel_conversation_id", { length: 255 }),
+    title: varchar("title", { length: 500 }),
+    contextType: varchar("context_type", { length: 100 }),
+    contextId: uuid("context_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_conversations_tenant_idx").on(table.tenantId),
+    userIdx: index("agent_conversations_user_idx").on(table.userId),
+    agentIdx: index("agent_conversations_agent_idx").on(table.agentId),
+    channelConversationIdx: index("agent_conversations_channel_conversation_idx").on(
+      table.channel,
+      table.channelConversationId
+    ),
+    createdAtIdx: index("agent_conversations_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const agentMessages = pgTable(
+  "agent_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => agentConversations.id, { onDelete: "cascade" }),
+    role: agentMessageRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_messages_tenant_idx").on(table.tenantId),
+    conversationIdx: index("agent_messages_conversation_idx").on(table.conversationId),
+    roleIdx: index("agent_messages_role_idx").on(table.role),
+    createdAtIdx: index("agent_messages_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const agentRuns = pgTable(
+  "agent_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => agentConversations.id, {
+      onDelete: "set null",
+    }),
+    channel: agentChannelEnum("channel").default("web").notNull(),
+    status: agentRunStatusEnum("status").default("queued").notNull(),
+    intent: varchar("intent", { length: 100 }),
+    input: jsonb("input").$type<Record<string, unknown>>().default({}).notNull(),
+    output: jsonb("output").$type<Record<string, unknown>>(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_runs_tenant_idx").on(table.tenantId),
+    userIdx: index("agent_runs_user_idx").on(table.userId),
+    agentIdx: index("agent_runs_agent_idx").on(table.agentId),
+    conversationIdx: index("agent_runs_conversation_idx").on(table.conversationId),
+    statusIdx: index("agent_runs_status_idx").on(table.status),
+    createdAtIdx: index("agent_runs_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const agentToolCalls = pgTable(
+  "agent_tool_calls",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => agentConversations.id, {
+      onDelete: "set null",
+    }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: "cascade" }),
+    toolName: varchar("tool_name", { length: 255 }).notNull(),
+    toolkit: varchar("toolkit", { length: 100 }).notNull(),
+    input: jsonb("input").$type<Record<string, unknown>>().default({}).notNull(),
+    output: jsonb("output").$type<Record<string, unknown>>(),
+    status: agentToolCallStatusEnum("status").default("pending").notNull(),
+    riskLevel: agentRiskLevelEnum("risk_level").default("low").notNull(),
+    approvalId: uuid("approval_id"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => ({
+    tenantIdx: index("agent_tool_calls_tenant_idx").on(table.tenantId),
+    userIdx: index("agent_tool_calls_user_idx").on(table.userId),
+    agentIdx: index("agent_tool_calls_agent_idx").on(table.agentId),
+    conversationIdx: index("agent_tool_calls_conversation_idx").on(table.conversationId),
+    runIdx: index("agent_tool_calls_run_idx").on(table.runId),
+    toolIdx: index("agent_tool_calls_tool_idx").on(table.toolkit, table.toolName),
+    statusIdx: index("agent_tool_calls_status_idx").on(table.status),
+    createdAtIdx: index("agent_tool_calls_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const agentUsageRecords = pgTable(
+  "agent_usage_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    runId: uuid("run_id").references(() => agentRuns.id, { onDelete: "set null" }),
+    usageType: agentUsageTypeEnum("usage_type").notNull(),
+    inputTokens: integer("input_tokens").default(0).notNull(),
+    outputTokens: integer("output_tokens").default(0).notNull(),
+    toolCalls: integer("tool_calls").default(0).notNull(),
+    credits: integer("credits").default(0).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_usage_records_tenant_idx").on(table.tenantId),
+    userIdx: index("agent_usage_records_user_idx").on(table.userId),
+    agentIdx: index("agent_usage_records_agent_idx").on(table.agentId),
+    runIdx: index("agent_usage_records_run_idx").on(table.runId),
+    usageTypeIdx: index("agent_usage_records_usage_type_idx").on(table.usageType),
+    createdAtIdx: index("agent_usage_records_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const agentActionApprovals = pgTable(
+  "agent_action_approvals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    runId: uuid("run_id").references(() => agentRuns.id, { onDelete: "set null" }),
+    toolCallId: uuid("tool_call_id").references(() => agentToolCalls.id, { onDelete: "set null" }),
+    toolName: varchar("tool_name", { length: 255 }).notNull(),
+    input: jsonb("input").$type<Record<string, unknown>>().default({}).notNull(),
+    status: agentApprovalStatusEnum("status").default("pending").notNull(),
+    reason: text("reason"),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_action_approvals_tenant_idx").on(table.tenantId),
+    agentIdx: index("agent_action_approvals_agent_idx").on(table.agentId),
+    runIdx: index("agent_action_approvals_run_idx").on(table.runId),
+    statusIdx: index("agent_action_approvals_status_idx").on(table.status),
+    createdAtIdx: index("agent_action_approvals_created_at_idx").on(table.createdAt),
+  })
+);
+
+export const agentChannelBindings = pgTable(
+  "agent_channel_bindings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    channel: agentChannelEnum("channel").notNull(),
+    externalUserId: varchar("external_user_id", { length: 255 }).notNull(),
+    externalOpenId: varchar("external_open_id", { length: 255 }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_channel_bindings_tenant_idx").on(table.tenantId),
+    userIdx: index("agent_channel_bindings_user_idx").on(table.userId),
+    channelExternalUnique: unique("agent_channel_bindings_channel_external_unique").on(
+      table.channel,
+      table.externalUserId
     ),
   })
 );

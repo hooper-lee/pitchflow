@@ -83,8 +83,8 @@ async function fetchWithPlaywright(url: string): Promise<FetchResult> {
   const start = Date.now();
   try {
     // Playwright is optional — installed separately via: npm install playwright && npx playwright install chromium
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pw = require("playwright");
+    const runtimeRequire = eval("require") as NodeRequire;
+    const pw = runtimeRequire("playwright");
     const chromium = pw.chromium as { launch: (opts: { headless: boolean }) => Promise<{ close: () => Promise<void>; newPage: () => Promise<{ goto: (url: string, opts: { timeout: number; waitUntil: string }) => Promise<void>; content: () => Promise<string>; url: () => string }> }> };
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();

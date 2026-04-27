@@ -11,6 +11,10 @@ export const AI_PROMPT_KEYS = {
   EMAIL_OUTREACH_USER: "AI_PROMPT_EMAIL_OUTREACH_USER",
   EMAIL_FOLLOWUP_USER: "AI_PROMPT_EMAIL_FOLLOWUP_USER",
   EMAIL_REPLY_FOLLOWUP_USER: "AI_PROMPT_EMAIL_REPLY_FOLLOWUP_USER",
+  AGENT_PLANNER_SYSTEM: "AI_PROMPT_AGENT_PLANNER_SYSTEM",
+  AGENT_PLANNER_USER: "AI_PROMPT_AGENT_PLANNER_USER",
+  AGENT_RESULT_SUMMARY_SYSTEM: "AI_PROMPT_AGENT_RESULT_SUMMARY_SYSTEM",
+  AGENT_RESULT_SUMMARY_USER: "AI_PROMPT_AGENT_RESULT_SUMMARY_USER",
 } as const;
 
 export const SCORING_WEIGHT_KEYS = {
@@ -310,6 +314,69 @@ Prospect reply:
 {replyBody}
 
 Return only JSON according to the required email schema.`,
+
+  [AI_PROMPT_KEYS.AGENT_PLANNER_SYSTEM]: `You are Hemera Cloud Agent's goal planner.
+
+Return exactly ONE valid JSON object.
+Do not output markdown, explanations, hidden reasoning, or text before/after JSON.
+Only choose intent from the provided intent catalog.
+Do not choose concrete backend tools.
+Do not invent IDs or privileged parameters.`,
+
+  [AI_PROMPT_KEYS.AGENT_PLANNER_USER]: `You are Hemera Cloud Agent's planner. PitchFlow is only one business toolkit.
+
+Classify the user's request into a high-level business goal. Extract useful business facts into slots.
+
+Available intents:
+{intentCatalog}
+
+User request:
+{message}
+
+Return JSON with this exact shape:
+{
+  "intent": "one intent from catalog",
+  "slots": {},
+  "confidence": 0.0,
+  "reply": "short user-facing Chinese reply"
+}
+
+Rules:
+- Do not choose backend tools.
+- Prefer action/workflow intent when the user says short action phrases like "挖掘客户", "找客户", "设置产品资料", "创建活动".
+- Use list/view intents only when the user explicitly asks to view, list, check status, progress, history, or statistics.
+- Extract obvious parameters into slots, but do not invent missing values.
+- For "帮我找 50 个美国宠物用品 DTC 品牌", use intent "start_discovery" and slots like {"keywords":["宠物用品 DTC 品牌"],"country":"United States","targetLimit":50}.
+- For product setup, extract companyName, productName, productDescription, valueProposition, senderName, senderTitle when present.
+- For ICP setup, extract targetCustomerText, mustHave, mustNotHave, productCategories, industry when present.
+- Do not output markdown.
+- Do not output explanations.
+- Do not output chain-of-thought.`,
+
+  [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_SYSTEM]: `You summarize PitchFlow tool execution results for users.
+
+Answer only in concise Chinese.
+Do not expose raw JSON.
+Do not output hidden reasoning, thinking process, markdown, or English analysis.
+Do not invent facts.
+If the result requires approval, failed, or is blocked, clearly state the next step.`,
+
+  [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_USER]: `Please summarize this Agent tool execution result for the user.
+
+User request:
+{userMessage}
+
+Planner intent:
+{intent}
+
+Tool execution results:
+{toolResults}
+
+Requirements:
+- Keep it under 120 Chinese characters.
+- Mention the important result and next step.
+- Do not expose raw JSON.
+- Do not invent information.`,
 };
 
 /**
@@ -469,6 +536,14 @@ function getPromptDescription(key: string): string {
       "冷启动未回复自动跟进提示词模板（用于 3/7/14 天跟进邮件生成）",
     [AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER]:
       "已回复客户推进提示词模板（用于基于客户回复继续推进）",
+    [AI_PROMPT_KEYS.AGENT_PLANNER_SYSTEM]:
+      "数字员工目标识别系统提示词（要求模型只输出业务目标 JSON，不直接选择工具）",
+    [AI_PROMPT_KEYS.AGENT_PLANNER_USER]:
+      "数字员工目标识别用户提示词模板（{intentCatalog}、{message} 会被替换）",
+    [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_SYSTEM]:
+      "数字员工工具结果总结系统提示词（控制总结口吻和安全边界）",
+    [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_USER]:
+      "数字员工工具结果总结用户提示词模板（{userMessage}、{intent}、{toolResults} 会被替换）",
   };
   return descriptions[key] || "";
 }

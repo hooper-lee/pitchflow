@@ -12,6 +12,9 @@ import {
   Timer,
   Globe,
   FlaskConical,
+  Bot,
+  ShieldCheck,
+  Network,
 } from "lucide-react";
 
 const adminNavItems = [
@@ -19,6 +22,10 @@ const adminNavItems = [
   { href: "/admin/users", label: "用户管理", icon: Users },
   { href: "/admin/tenants", label: "租户管理", icon: Building2 },
   { href: "/admin/usage", label: "使用量监控", icon: BarChart3 },
+  { href: "/admin/agent-tools", label: "Agent 工具", icon: Bot },
+  { href: "/admin/agent-runs", label: "Agent 运行", icon: BarChart3 },
+  { href: "/admin/agent-approvals", label: "Agent 审批", icon: ShieldCheck },
+  { href: "/admin/agent-mcp", label: "MCP Gateway", icon: Network },
   { href: "/admin/tasks", label: "定时任务", icon: Timer },
   { href: "/admin/configs", label: "系统配置", icon: Settings },
   { href: "/admin/detector", label: "网站检测器", icon: Globe },

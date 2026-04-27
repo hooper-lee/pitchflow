@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1776667431792,
+      "tag": "0000_short_anthem",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776679123592,
+      "tag": "0001_complete_master_mold",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777007339376,
+      "tag": "0002_fancy_meltdown",
+      "breakpoints": true
+    }
+  ]
+}
