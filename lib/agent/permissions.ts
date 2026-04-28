@@ -24,6 +24,14 @@ export function normalizeAgentPlan(plan: string | undefined): AgentPlan {
   return "free";
 }
 
+export function isAgentRoleAtLeast(currentRole: AgentRole, requiredRole: AgentRole) {
+  return roleRanks[currentRole] >= roleRanks[requiredRole];
+}
+
+export function isAgentPlanAtLeast(currentPlan: AgentPlan, requiredPlan: AgentPlan) {
+  return planRanks[currentPlan] >= planRanks[requiredPlan];
+}
+
 export function authorizeAgentTool(context: AgentContext, tool: AgentTool) {
   if (!tool.allowedChannels.includes(context.channel)) {
     return { allowed: false, status: "blocked" as const, reason: "当前渠道不允许调用该工具" };

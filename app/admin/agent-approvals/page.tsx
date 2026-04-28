@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ApprovalRow {
@@ -15,12 +16,24 @@ interface ApprovalRow {
 export default function AdminAgentApprovalsPage() {
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
 
-  useEffect(() => {
+  function loadApprovals() {
     fetch("/api/admin/agent-approvals")
       .then((response) => response.json())
       .then((body) => setApprovals(body.data?.approvals || []))
       .catch(() => setApprovals([]));
+  }
+
+  useEffect(() => {
+    loadApprovals();
   }, []);
+
+  function decideApproval(approvalId: string, status: "approved" | "rejected") {
+    fetch(`/api/agent/approvals/${approvalId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }).then(() => loadApprovals());
+  }
 
   return (
     <div className="space-y-5">
@@ -45,6 +58,20 @@ export default function AdminAgentApprovalsPage() {
               <p className="mt-2 text-xs text-slate-500">
                 {new Date(approval.createdAt).toLocaleString()}
               </p>
+              {approval.status === "pending" ? (
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" onClick={() => decideApproval(approval.id, "approved")}>
+                    确认执行
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => decideApproval(approval.id, "rejected")}
+                  >
+                    拒绝
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ))}
         </CardContent>

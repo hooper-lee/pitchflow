@@ -14,15 +14,31 @@ interface AgentToolRow {
   creditCost: number;
   allowedChannels: string[];
 }
+interface AgentPlanPolicyRow {
+  plan: string;
+  monthlyCredits: number;
+  contextMessageLimit: number;
+  allowedChannels: string[];
+  allowWriteTools: boolean;
+  allowAutoTasks: boolean;
+  allowMcp: boolean;
+}
 
 export default function AdminAgentToolsPage() {
   const [tools, setTools] = useState<AgentToolRow[]>([]);
+  const [planPolicies, setPlanPolicies] = useState<AgentPlanPolicyRow[]>([]);
 
   useEffect(() => {
     fetch("/api/admin/agent-tools")
       .then((response) => response.json())
-      .then((body) => setTools(body.data?.tools || []))
-      .catch(() => setTools([]));
+      .then((body) => {
+        setTools(body.data?.tools || []);
+        setPlanPolicies(Object.values(body.data?.planPolicies || {}));
+      })
+      .catch(() => {
+        setTools([]);
+        setPlanPolicies([]);
+      });
   }, []);
 
   return (
@@ -31,6 +47,32 @@ export default function AdminAgentToolsPage() {
         <h1 className="text-3xl font-bold tracking-tight">Agent 工具权限</h1>
         <p className="text-muted-foreground">查看内置 Toolkit、风险等级、套餐和渠道限制。</p>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>套餐策略</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {planPolicies.map((policy) => (
+            <div key={policy.plan} className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium capitalize">{policy.plan}</span>
+                <Badge variant={policy.allowWriteTools ? "secondary" : "outline"}>
+                  {policy.allowWriteTools ? "write" : "read-only"}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Credits {policy.monthlyCredits} · Context {policy.contextMessageLimit}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Channels: {policy.allowedChannels.join(", ")}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                AutoTasks: {String(policy.allowAutoTasks)} · MCP: {String(policy.allowMcp)}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>工具列表</CardTitle>

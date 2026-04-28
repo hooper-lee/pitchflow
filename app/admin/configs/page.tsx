@@ -109,11 +109,18 @@ const CONFIG_SECTIONS: ConfigSection[] = [
     ],
   },
   {
-    title: "告警通知",
-    description: "飞书和企业微信 Webhook",
+    title: "飞书 / 企业微信",
+    description: "消息追踪 Webhook 与 Hemera Agent 私聊 Channel",
     fields: [
       { key: "FEISHU_WEBHOOK_URL", label: "飞书 Webhook URL", secret: false, placeholder: "https://open.feishu.cn/open-apis/bot/v2/hook/..." },
+      { key: "FEISHU_APP_ID", label: "飞书 App ID", secret: false, placeholder: "cli_..." },
+      { key: "FEISHU_APP_SECRET", label: "飞书 App Secret", secret: true, placeholder: "..." },
+      { key: "FEISHU_WEBHOOK_SECRET", label: "飞书事件回调 Secret", secret: true, placeholder: "..." },
       { key: "WECOM_WEBHOOK_URL", label: "企业微信 Webhook URL", secret: false, placeholder: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." },
+      { key: "WECOM_CORP_ID", label: "企业微信 Corp ID", secret: false, placeholder: "ww..." },
+      { key: "WECOM_AGENT_ID", label: "企业微信 Agent ID", secret: false, placeholder: "1000002" },
+      { key: "WECOM_APP_SECRET", label: "企业微信 App Secret", secret: true, placeholder: "..." },
+      { key: "WECOM_WEBHOOK_SECRET", label: "企业微信回调 Token", secret: true, placeholder: "..." },
     ],
   },
   {

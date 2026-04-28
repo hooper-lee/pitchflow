@@ -4,12 +4,27 @@ import {
   agentConversations,
   agentMessages,
   agentRuns,
-  agents,
   agentToolCalls,
 } from "@/lib/db/schema";
 import { logAuditEvent } from "@/lib/services/audit.service";
+import { getActiveTenantAgent } from "@/lib/agent/agent-service";
 import { createApprovalRequest } from "@/lib/agent/approvals";
-import { recordAgentToolUsage } from "@/lib/agent/billing";
+import {
+  ensureAgentCreditsAvailable,
+  recordAgentPlannerUsage,
+  recordAgentRunUsage,
+  recordAgentToolUsage,
+} from "@/lib/agent/billing";
+import { authorizeAgentChannel } from "@/lib/agent/policies/channel-policy";
+import {
+  AGENT_PLANNER_CREDIT_COST,
+  AGENT_RUN_CREDIT_COST,
+  getAgentPlanPolicy,
+  isAgentIntentAllowed,
+  trimAgentContextMessages,
+} from "@/lib/agent/policies/plan-policy";
+import { authorizeAgentWorkflow } from "@/lib/agent/policies/workflow-policy";
+import { canUseAgent } from "@/lib/agent/policies/role-policy";
 import { planAgentResponseWithModel } from "@/lib/agent/planner";
 import { authorizeAgentTool } from "@/lib/agent/permissions";
 import { summarizeAgentResult } from "@/lib/agent/response-summarizer";
@@ -22,10 +37,6 @@ import type {
   AgentToolCallResult,
   RunAgentInput,
 } from "@/lib/agent/types";
-
-const defaultAgentName = "PitchFlow Agent";
-const defaultSystemPrompt =
-  "你是 PitchFlow 数字员工，负责帮助外贸团队使用系统完成获客、调研、邮件和跟进。";
 
 function buildConversationTitle(message: string) {
   return message.trim().slice(0, 48) || "新对话";
@@ -42,31 +53,6 @@ function buildToolReply(toolCallResult: AgentToolCallResult, fallbackReply: stri
   }
 
   return fallbackReply;
-}
-
-async function ensureDefaultAgent(tenantId: string, userId: string) {
-  const [existingAgent] = await db
-    .select()
-    .from(agents)
-    .where(and(eq(agents.tenantId, tenantId), eq(agents.name, defaultAgentName)))
-    .limit(1);
-
-  if (existingAgent) return existingAgent;
-
-  const [createdAgent] = await db
-    .insert(agents)
-    .values({
-      tenantId,
-      name: defaultAgentName,
-      description: "PitchFlow 站内数字员工",
-      systemPrompt: defaultSystemPrompt,
-      enabledToolkits: ["pitchflow.setup"],
-      enabledTools: ["pitchflow.setup.check_readiness"],
-      createdBy: userId,
-    })
-    .returning();
-
-  return createdAgent;
 }
 
 async function getOrCreateConversation(input: RunAgentInput, agentId: string) {
@@ -99,7 +85,12 @@ async function getOrCreateConversation(input: RunAgentInput, agentId: string) {
   return createdConversation;
 }
 
-async function createAgentRun(input: RunAgentInput, agentId: string, conversationId: string) {
+async function createAgentRun(
+  input: RunAgentInput,
+  agentId: string,
+  conversationId: string,
+  contextMessages: RunAgentInput["messages"]
+) {
   const [run] = await db
     .insert(agentRuns)
     .values({
@@ -109,7 +100,7 @@ async function createAgentRun(input: RunAgentInput, agentId: string, conversatio
       conversationId,
       channel: input.channel,
       status: "running",
-      input: { message: input.message },
+      input: { message: input.message, contextMessages: contextMessages || [] },
       startedAt: new Date(),
     })
     .returning();
@@ -173,6 +164,12 @@ async function executePlannedTool(
     }
     return { toolName, status: authorization.status, errorMessage: authorization.reason };
   }
+
+  await ensureAgentCreditsAvailable(
+    context.tenantId,
+    getAgentPlanPolicy(context.tenantPlan),
+    tool.creditCost
+  );
 
   const toolCall = await createToolCall(executableContext, tool, input);
 
@@ -298,6 +295,35 @@ async function failAgentRunWithReply(
   };
 }
 
+async function completePolicyBlockedRun(
+  input: RunAgentInput,
+  agentId: string,
+  conversationId: string,
+  runId: string,
+  intent: string,
+  reason: string
+) {
+  const cards = [{ kind: "status" as const, title: "套餐策略", status: "已拦截", detail: reason }];
+  await completeAgentRun(input, agentId, conversationId, runId, {
+    status: "failed",
+    intent,
+    reply: reason,
+    toolCalls: [],
+    cards,
+    plannerType: "rules",
+  });
+
+  return {
+    conversationId,
+    runId,
+    status: "failed" as const,
+    intent,
+    reply: reason,
+    toolCalls: [],
+    cards,
+  };
+}
+
 async function completeWorkflowQuestionRun(
   input: RunAgentInput,
   agentId: string,
@@ -327,12 +353,74 @@ async function completeWorkflowQuestionRun(
 }
 
 export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
-  const agent = await ensureDefaultAgent(input.tenantId, input.userId);
+  const planPolicy = getAgentPlanPolicy(input.tenantPlan);
+  if (!canUseAgent(input.userRole)) {
+    throw new Error("当前账号角色不能使用 Agent。");
+  }
+  const channelAuthorization = authorizeAgentChannel(planPolicy, input.channel);
+  if (!channelAuthorization.allowed) {
+    throw new Error(channelAuthorization.reason);
+  }
+
+  await ensureAgentCreditsAvailable(
+    input.tenantId,
+    planPolicy,
+    AGENT_RUN_CREDIT_COST + AGENT_PLANNER_CREDIT_COST
+  );
+
+  const agent = await getActiveTenantAgent(input.tenantId);
+  if (!agent) {
+    return {
+      conversationId: "",
+      runId: "",
+      status: "failed",
+      intent: "agent_disabled",
+      reply:
+        "这个团队还没有启用 Hemera Agent。请团队管理员先启用数字员工，启用后成员就可以在这里继续对话和查询任务。",
+      toolCalls: [],
+      cards: [
+        {
+          kind: "status",
+          title: "Hemera Agent",
+          status: "未启用",
+          detail: "team_admin 可以在 Agent 状态中启用团队数字员工。",
+        },
+      ],
+    };
+  }
   const conversation = await getOrCreateConversation(input, agent.id);
-  const run = await createAgentRun(input, agent.id, conversation.id);
+  const contextMessages = trimAgentContextMessages(
+    input.messages || [],
+    planPolicy.contextMessageLimit
+  );
+  const run = await createAgentRun(input, agent.id, conversation.id, contextMessages);
+  const context: AgentContext = {
+    tenantId: input.tenantId,
+    userId: input.userId,
+    userRole: input.userRole,
+    tenantPlan: input.tenantPlan,
+    channel: input.channel,
+    agentId: agent.id,
+    conversationId: conversation.id,
+    runId: run.id,
+  };
+
+  await recordAgentRunUsage(context, AGENT_RUN_CREDIT_COST);
   await saveMessage(input.tenantId, conversation.id, "user", input.message);
+  await recordAgentPlannerUsage(context, AGENT_PLANNER_CREDIT_COST);
 
   const plan = await planAgentResponseWithModel(input.message);
+  if (!isAgentIntentAllowed(planPolicy, plan.intent)) {
+    return completePolicyBlockedRun(
+      input,
+      agent.id,
+      conversation.id,
+      run.id,
+      plan.intent,
+      "当前 Free 套餐只支持普通对话、配置检查和只读查询。创建资料、挖掘任务、活动或客户需要 Pro 套餐。"
+    );
+  }
+
   let workflowResult;
   try {
     workflowResult = handleWorkflowTurn({
@@ -346,6 +434,20 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
     return failAgentRunWithReply(input, agent.id, conversation.id, run.id, error);
   }
   if (workflowResult.handled) {
+    const workflowAuthorization = authorizeAgentWorkflow(
+      planPolicy,
+      workflowResult.intent || plan.intent
+    );
+    if (!workflowAuthorization.allowed) {
+      return completePolicyBlockedRun(
+        input,
+        agent.id,
+        conversation.id,
+        run.id,
+        workflowResult.intent || plan.intent,
+        workflowAuthorization.reason || "当前套餐不允许执行这个工作流。"
+      );
+    }
     if (workflowResult.metadata) {
       await updateConversationMetadata(conversation.id, workflowResult.metadata);
     }
@@ -361,17 +463,6 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
       );
     }
   }
-
-  const context: AgentContext = {
-    tenantId: input.tenantId,
-    userId: input.userId,
-    userRole: input.userRole,
-    tenantPlan: input.tenantPlan,
-    channel: input.channel,
-    agentId: agent.id,
-    conversationId: conversation.id,
-    runId: run.id,
-  };
 
   const plannedToolCall = workflowResult?.toolCall || plan.toolCall;
   const toolCalls = plannedToolCall

@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  handleChannelAgentMessage,
+  readFeishuChannelMessage,
+  sendChannelReply,
+  verifyChannelWebhookSignature,
+} from "@/lib/agent/channel-webhook";
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
+  const rawBody = await request.text();
+  const body = JSON.parse(rawBody || "{}") as Record<string, unknown>;
   if (body?.type === "url_verification" && body?.challenge) {
     return NextResponse.json({ challenge: body.challenge });
   }
+  if (!(await verifyChannelWebhookSignature("feishu", rawBody, request.headers))) {
+    return NextResponse.json({ error: "Invalid Feishu signature" }, { status: 403 });
+  }
 
-  return NextResponse.json(
-    {
-      error: "Feishu Agent channel is not bound yet",
-      message: "请先完成用户身份绑定后再启用飞书 Agent 私聊入口。",
-    },
-    { status: 501 }
-  );
+  const channelMessage = readFeishuChannelMessage(body);
+  if (!channelMessage.externalUserId || !channelMessage.text) {
+    return NextResponse.json({ error: "Invalid Feishu message" }, { status: 400 });
+  }
+
+  const reply = await handleChannelAgentMessage("feishu", channelMessage);
+  await sendChannelReply("feishu", channelMessage, reply).catch((error) => {
+    console.error("Feishu reply failed:", error);
+  });
+
+  return NextResponse.json({ reply });
 }

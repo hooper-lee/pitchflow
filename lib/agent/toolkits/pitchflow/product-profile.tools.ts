@@ -85,7 +85,7 @@ export const productProfileTools: AgentTool[] = [
     description: "创建或更新当前租户的产品资料，支持公司名称、产品名称、产品描述、核心卖点、发件人姓名和职位。",
     riskLevel: "low",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:

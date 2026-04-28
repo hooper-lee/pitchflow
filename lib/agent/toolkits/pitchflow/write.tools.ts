@@ -191,7 +191,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "创建精准挖掘任务。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 2,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -205,7 +205,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "创建活动草稿，不发送邮件。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -219,7 +219,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "创建邮件模板草稿。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -233,7 +233,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "更新已有邮件策略模板。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -247,7 +247,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "创建 ICP 画像草稿。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -261,7 +261,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "更新已有 ICP 画像。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -275,7 +275,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "手动创建客户线索。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:
@@ -289,7 +289,7 @@ export const pitchflowWriteTools: AgentTool[] = [
     description: "更新已有客户线索资料。",
     riskLevel: "medium",
     requiredRole: "member",
-    requiredPlan: "free",
+    requiredPlan: "pro",
     creditCost: 1,
     allowedChannels: ["web", "feishu", "wecom", "api"],
     inputHint:

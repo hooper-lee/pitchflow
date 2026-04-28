@@ -22,7 +22,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "viewer",
 ]);
 
-export const planEnum = pgEnum("plan", ["free", "pro", "enterprise"]);
+export const planEnum = pgEnum("plan", ["free", "pro", "business", "enterprise"]);
 
 export const prospectStatusEnum = pgEnum("prospect_status", [
   "new",

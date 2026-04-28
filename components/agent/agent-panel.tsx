@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const AGENT_CHAT_ENDPOINT = "/api/agent/chat";
+const AGENT_STATUS_ENDPOINT = "/api/agent/status";
 
 type AgentMessageRole = "user" | "assistant" | "system";
 type AgentCardKind = "tool" | "status" | "workflow";
@@ -53,10 +54,13 @@ type UnknownRecord = Record<string, unknown>;
 type AgentPanelController = {
   isOpen: boolean;
   isSending: boolean;
+  agentEnabled: boolean;
+  canManageAgent: boolean;
   draftMessage: string;
   messages: AgentMessage[];
   messageListRef: RefObject<HTMLDivElement>;
   setDraftMessage: (message: string) => void;
+  enableAgent: () => void;
   closePanel: () => void;
   togglePanel: () => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -76,7 +80,7 @@ type SubmitDraftMessageOptions = {
 const welcomeMessage: AgentMessage = {
   id: "welcome",
   role: "assistant",
-  content: "我是 PitchFlow Agent，可以帮你梳理线索、活动和下一步动作。",
+  content: "我是 Hemera Agent，可以帮你梳理线索、活动和下一步动作。",
 };
 const toolTitleMap: Record<string, string> = {
   "pitchflow.setup.check_readiness": "获客准备检查",
@@ -248,6 +252,22 @@ async function requestAssistantMessage(
   };
 }
 
+async function requestAgentStatus() {
+  const response = await fetch(AGENT_STATUS_ENDPOINT);
+  if (!response.ok) return { enabled: false, canManage: false };
+  const body = (await response.json()) as { data?: { enabled?: boolean; canManage?: boolean } };
+  return {
+    enabled: Boolean(body.data?.enabled),
+    canManage: Boolean(body.data?.canManage),
+  };
+}
+
+async function requestEnableAgent() {
+  const response = await fetch(AGENT_STATUS_ENDPOINT, { method: "POST" });
+  if (!response.ok) throw new Error("启用 Agent 失败");
+  return requestAgentStatus();
+}
+
 function useAgentPanelScroll(
   messageListRef: RefObject<HTMLDivElement>,
   messages: AgentMessage[],
@@ -414,8 +434,11 @@ function AgentComposer({
 function AgentPanelWindow({
   messages,
   isSending,
+  agentEnabled,
+  canManageAgent,
   draftMessage,
   messageListRef,
+  onEnableAgent,
   onClose,
   onDraftChange,
   onDraftKeyDown,
@@ -423,8 +446,11 @@ function AgentPanelWindow({
 }: {
   messages: AgentMessage[];
   isSending: boolean;
+  agentEnabled: boolean;
+  canManageAgent: boolean;
   draftMessage: string;
   messageListRef: RefObject<HTMLDivElement>;
+  onEnableAgent: () => void;
   onClose: () => void;
   onDraftChange: (message: string) => void;
   onDraftKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -437,9 +463,14 @@ function AgentPanelWindow({
           <Bot className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-slate-900">PitchFlow Agent</h2>
-          <p className="text-xs text-slate-500">站内助手 · 可调用工具和任务状态</p>
+          <h2 className="text-sm font-semibold text-slate-900">Hemera Agent</h2>
+          <p className="text-xs text-slate-500">云端数字员工 · PitchFlow Toolkit</p>
         </div>
+        {!agentEnabled && canManageAgent ? (
+          <Button type="button" size="sm" variant="secondary" onClick={onEnableAgent}>
+            启用
+          </Button>
+        ) : null}
         <Button type="button" variant="ghost" size="icon" aria-label="关闭 Agent" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
@@ -486,10 +517,41 @@ function useAgentPanelController(): AgentPanelController {
   const [messages, setMessages] = useState<AgentMessage[]>([welcomeMessage]);
   const [draftMessage, setDraftMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [agentEnabled, setAgentEnabled] = useState(true);
+  const [canManageAgent, setCanManageAgent] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const messageListRef = useRef<HTMLDivElement>(null);
 
   useAgentPanelScroll(messageListRef, messages, isSending);
+
+  useEffect(() => {
+    requestAgentStatus()
+      .then((status) => {
+        setAgentEnabled(status.enabled);
+        setCanManageAgent(status.canManage);
+      })
+      .catch(() => {});
+  }, []);
+
+  function enableAgent() {
+    requestEnableAgent()
+      .then((status) => {
+        setAgentEnabled(status.enabled);
+        setCanManageAgent(status.canManage);
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          {
+            id: createMessageId("system"),
+            role: "system",
+            content: "Hemera Agent 已启用，团队成员现在可以使用站内数字员工。",
+          },
+        ]);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "启用 Agent 失败";
+        setMessages((currentMessages) => [...currentMessages, createErrorMessage(message)]);
+      });
+  }
 
   function sendMessage() {
     void submitDraftMessage({
@@ -519,10 +581,13 @@ function useAgentPanelController(): AgentPanelController {
   return {
     isOpen,
     isSending,
+    agentEnabled,
+    canManageAgent,
     draftMessage,
     messages,
     messageListRef,
     setDraftMessage,
+    enableAgent,
     closePanel: () => setIsOpen(false),
     togglePanel: () => setIsOpen((currentOpenState) => !currentOpenState),
     handleSubmit,
@@ -539,8 +604,11 @@ export function AgentPanel() {
         <AgentPanelWindow
           messages={agentPanel.messages}
           isSending={agentPanel.isSending}
+          agentEnabled={agentPanel.agentEnabled}
+          canManageAgent={agentPanel.canManageAgent}
           draftMessage={agentPanel.draftMessage}
           messageListRef={agentPanel.messageListRef}
+          onEnableAgent={agentPanel.enableAgent}
           onClose={agentPanel.closePanel}
           onDraftChange={agentPanel.setDraftMessage}
           onDraftKeyDown={agentPanel.handleDraftKeyDown}

@@ -6,27 +6,25 @@ import {
   readStringSlot,
 } from "@/lib/agent/workflows/slot-utils";
 
-const slotLabels: Record<string, string> = {
-  companyName: "公司名称",
-  productName: "产品/服务名称",
-  productDescription: "产品介绍",
-  valueProposition: "核心卖点",
-  senderName: "发件人姓名",
-  senderTitle: "发件人职位",
-  name: "名称",
-  targetCustomerText: "目标客户描述",
-  keywords: "目标客户关键词",
-  subject: "邮件主题",
-  body: "邮件正文",
+const slotPrompts: Record<string, string> = {
+  companyName: "你们公司怎么称呼",
+  productName: "具体卖什么产品或服务",
+  productDescription: "这件产品主要解决什么问题",
+  valueProposition: "客户为什么应该选择你们",
+  name: "你希望这件事叫什么名字",
+  targetCustomerText: "你想找哪类客户",
+  keywords: "可以用哪些关键词去找这类客户",
+  subject: "你希望邮件先用什么角度开场",
+  body: "你希望邮件正文表达哪些重点",
 };
 const defaultDiscoveryJobName = "Agent 创建的精准挖掘任务";
 
-function labelMissingSlots(missingSlots: string[]) {
-  return missingSlots.map((slotName) => slotLabels[slotName] || slotName);
+function describeMissingNeeds(missingSlots: string[]) {
+  return missingSlots.slice(0, 2).map((slotName) => slotPrompts[slotName] || "还需要一点关键信息");
 }
 
 function buildDefaultQuestion(title: string, missingSlots: string[]) {
-  return `我在帮你处理「${title}」。还需要确认：${labelMissingSlots(missingSlots).join("、")}。你可以直接用自然语言补充，不用按表单格式写。`;
+  return `我在帮你处理「${title}」。先补充这两点就行：${describeMissingNeeds(missingSlots).join("、")}。可以直接用一句话说，不用按表单格式写。`;
 }
 
 function normalizeDiscoverySlots(slots: Record<string, unknown>) {
@@ -77,7 +75,7 @@ export const workflowDefinitions: WorkflowDefinition[] = [
     startIntents: ["setup_product_profile"],
     buildInput: (slots) => slots,
     buildQuestion: (missingSlots) =>
-      `我先帮你整理产品资料。请补充：${labelMissingSlots(missingSlots).join("、")}。例如：我们是做 AI 自动化获客助手，卖给外贸团队，核心卖点是自动挖掘客户和生成开发信。`,
+      `我先帮你整理产品资料。先告诉我：${describeMissingNeeds(missingSlots).join("、")}。例如：我们做 AI 自动化获客，卖给外贸团队，核心价值是自动找客户和生成开发信。`,
   },
   {
     goal: "setup_icp_profile",
@@ -96,7 +94,7 @@ export const workflowDefinitions: WorkflowDefinition[] = [
       productCategories: readStringArraySlot(slots, "productCategories"),
     }),
     buildQuestion: (missingSlots) =>
-      `你想找什么样的客户？直接描述目标客户就行，比如“北美 DTC 家具品牌，官网独立站，排除工厂和 marketplace”。还缺：${labelMissingSlots(missingSlots).join("、")}。`,
+      `你想找什么样的客户？先补充：${describeMissingNeeds(missingSlots).join("、")}。比如“北美 DTC 家具品牌，官网独立站，排除工厂和 marketplace”。`,
   },
   {
     goal: "start_discovery",
@@ -114,7 +112,7 @@ export const workflowDefinitions: WorkflowDefinition[] = [
       targetLimit: readNumberSlot(slots, "targetLimit") || 20,
     }),
     buildQuestion: (missingSlots) =>
-      `可以，我来帮你创建精准挖掘任务。请告诉我目标客户类型，例如“美国宠物用品 DTC 品牌，找 50 个”。还缺：${labelMissingSlots(missingSlots).join("、")}。`,
+      `可以，我来帮你创建精准挖掘任务。先告诉我：${describeMissingNeeds(missingSlots).join("、")}。例如“美国宠物用品 DTC 品牌，找 50 个”。`,
   },
   {
     goal: "setup_email_template",

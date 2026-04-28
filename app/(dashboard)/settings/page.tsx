@@ -79,6 +79,15 @@ export default function SettingsPage() {
           </Card>
         </Link>
 
+        <Link href="/settings/agent">
+          <Card className="cursor-pointer transition-colors hover:bg-slate-50">
+            <CardHeader>
+              <CardTitle className="text-base">数字员工</CardTitle>
+              <CardDescription>启用、停用和管理 Hemera Agent</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         <Link href="/settings/alerts">
           <Card className="cursor-pointer transition-colors hover:bg-slate-50">
             <CardHeader>

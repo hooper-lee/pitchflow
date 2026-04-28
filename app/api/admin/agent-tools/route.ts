@@ -1,4 +1,5 @@
 import { listAgentTools } from "@/lib/agent/tool-registry";
+import { agentPlanPolicies } from "@/lib/agent/policies/plan-policy";
 import { apiResponse, handleApiError } from "@/lib/utils/api-handler";
 
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
       allowedChannels: tool.allowedChannels,
     }));
 
-    return apiResponse({ tools });
+    return apiResponse({ tools, planPolicies: agentPlanPolicies });
   } catch (error) {
     return handleApiError(error);
   }

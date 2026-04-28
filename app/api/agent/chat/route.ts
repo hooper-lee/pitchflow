@@ -75,6 +75,7 @@ export async function POST(request: Request) {
       channel: "web",
       message: body.message,
       conversationId: body.conversationId,
+      messages: body.messages,
     });
 
     return NextResponse.json({
