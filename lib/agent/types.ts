@@ -93,5 +93,4 @@ export interface RunAgentInput {
   channel: AgentChannel;
   message: string;
   conversationId?: string;
-  messages?: Array<{ role: "user" | "assistant" | "system"; content: string }>;
 }

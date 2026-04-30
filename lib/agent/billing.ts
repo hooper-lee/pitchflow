@@ -1,7 +1,11 @@
 import { db } from "@/lib/db";
 import { agentUsageRecords } from "@/lib/db/schema";
 import type { AgentContext } from "@/lib/agent/types";
-import type { AgentPlanPolicy } from "@/lib/agent/policies/plan-policy";
+import {
+  AGENT_PLANNER_CREDIT_COST,
+  AGENT_RUN_CREDIT_COST,
+  type AgentPlanPolicy,
+} from "@/lib/agent/policies/plan-policy";
 import { and, eq, gte, sql } from "drizzle-orm";
 
 function getCurrentMonthStart() {
@@ -46,6 +50,14 @@ export async function recordAgentRunUsage(context: AgentContext, credits: number
     credits,
     metadata: { channel: context.channel, plan: context.tenantPlan },
   });
+}
+
+export function getInitialAgentUsageCredits() {
+  return {
+    conversationCredits: AGENT_RUN_CREDIT_COST,
+    plannerCredits: AGENT_PLANNER_CREDIT_COST,
+    totalCredits: AGENT_RUN_CREDIT_COST + AGENT_PLANNER_CREDIT_COST,
+  };
 }
 
 export async function recordAgentPlannerUsage(context: AgentContext, credits: number) {

@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
+import { tenants, users } from "@/lib/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { getAgentPlanPolicy } from "@/lib/agent/policies/plan-policy";
+import { normalizeAgentPlan } from "@/lib/agent/permissions";
+import { getMonthlyAgentCreditsByUser } from "@/lib/agent/usage-summary";
 import {
   Table,
   TableBody,
@@ -15,10 +18,20 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
   const allUsers = await db
-    .select()
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      tenantId: users.tenantId,
+      tenantPlan: tenants.plan,
+      createdAt: users.createdAt,
+    })
     .from(users)
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .orderBy(desc(users.createdAt))
     .limit(100);
+  const userCredits = await getMonthlyAgentCreditsByUser(allUsers.map((user) => user.id));
 
   return (
     <div className="space-y-6">
@@ -35,6 +48,7 @@ export default async function AdminUsersPage() {
               <TableHead>姓名</TableHead>
               <TableHead>角色</TableHead>
               <TableHead>租户 ID</TableHead>
+              <TableHead>本月 Agent Credits</TableHead>
               <TableHead>注册时间</TableHead>
             </TableRow>
           </TableHeader>
@@ -50,6 +64,10 @@ export default async function AdminUsersPage() {
                 </TableCell>
                 <TableCell className="font-mono text-xs">
                   {user.tenantId?.slice(0, 8) || "—"}...
+                </TableCell>
+                <TableCell>
+                  {userCredits.get(user.id) || 0} /{" "}
+                  {getAgentPlanPolicy(normalizeAgentPlan(user.tenantPlan || undefined)).monthlyCredits}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(user.createdAt).toLocaleDateString("zh-CN")}

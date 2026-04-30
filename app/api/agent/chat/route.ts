@@ -16,14 +16,6 @@ type AgentResponseCard = {
 const agentChatRequestSchema = z.object({
   message: z.string().min(1).max(4000),
   conversationId: z.string().uuid().optional(),
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant", "system"]),
-        content: z.string(),
-      })
-    )
-    .optional(),
 });
 
 function buildCards(toolCalls: Awaited<ReturnType<typeof runAgent>>["toolCalls"]): AgentResponseCard[] {
@@ -75,7 +67,6 @@ export async function POST(request: Request) {
       channel: "web",
       message: body.message,
       conversationId: body.conversationId,
-      messages: body.messages,
     });
 
     return NextResponse.json({

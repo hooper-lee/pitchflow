@@ -16,6 +16,7 @@ export interface WorkflowDefinition {
   startIntents: string[];
   buildInput: (slots: Record<string, unknown>) => Record<string, unknown>;
   buildQuestion: (missingLabels: string[], slots: Record<string, unknown>) => string;
+  buildSummary?: (slots: Record<string, unknown>) => string;
   normalizeSlots?: (slots: Record<string, unknown>) => Record<string, unknown>;
 }
 

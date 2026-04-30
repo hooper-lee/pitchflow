@@ -95,13 +95,16 @@ function buildReadyResult(
   definition: WorkflowDefinition,
   state: AgentWorkflowState
 ): WorkflowTurnResult {
+  const summary = definition.buildSummary
+    ? definition.buildSummary(state.slots)
+    : `信息已经够了，我现在执行「${definition.title}」。`;
   return {
     handled: true,
     intent: definition.goal,
-    reply: `信息已经够了，我现在执行「${definition.title}」。`,
+    reply: summary,
     metadata: { ...metadata, agentWorkflow: null },
     toolCall: { toolName: definition.toolName, input: definition.buildInput(state.slots) },
-    cards: buildWorkflowCard(definition, "执行中"),
+    cards: buildWorkflowCard(definition, "执行中", summary),
   };
 }
 

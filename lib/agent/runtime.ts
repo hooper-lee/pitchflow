@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   agentConversations,
@@ -11,24 +11,20 @@ import { getActiveTenantAgent } from "@/lib/agent/agent-service";
 import { createApprovalRequest } from "@/lib/agent/approvals";
 import {
   ensureAgentCreditsAvailable,
+  getInitialAgentUsageCredits,
   recordAgentPlannerUsage,
   recordAgentRunUsage,
   recordAgentToolUsage,
 } from "@/lib/agent/billing";
 import { authorizeAgentChannel } from "@/lib/agent/policies/channel-policy";
-import {
-  AGENT_PLANNER_CREDIT_COST,
-  AGENT_RUN_CREDIT_COST,
-  getAgentPlanPolicy,
-  isAgentIntentAllowed,
-  trimAgentContextMessages,
-} from "@/lib/agent/policies/plan-policy";
+import { getAgentPlanPolicy, isAgentIntentAllowed } from "@/lib/agent/policies/plan-policy";
 import { authorizeAgentWorkflow } from "@/lib/agent/policies/workflow-policy";
 import { canUseAgent } from "@/lib/agent/policies/role-policy";
 import { planAgentResponseWithModel } from "@/lib/agent/planner";
 import { authorizeAgentTool } from "@/lib/agent/permissions";
 import { summarizeAgentResult } from "@/lib/agent/response-summarizer";
 import { getAgentTool } from "@/lib/agent/tool-registry";
+import { buildAgentDisabledResult } from "@/lib/agent/runtime-results";
 import { handleWorkflowTurn } from "@/lib/agent/workflows/engine";
 import type {
   AgentContext,
@@ -49,7 +45,10 @@ function buildToolReply(toolCallResult: AgentToolCallResult, fallbackReply: stri
 
   const output = toolCallResult.output;
   if (output && typeof output === "object" && "summary" in output) {
-    return String((output as { summary: unknown }).summary);
+    const toolSummary = String((output as { summary: unknown }).summary);
+    return fallbackReply && fallbackReply !== toolSummary
+      ? `${fallbackReply}\n\n${toolSummary}`
+      : toolSummary;
   }
 
   return fallbackReply;
@@ -89,7 +88,7 @@ async function createAgentRun(
   input: RunAgentInput,
   agentId: string,
   conversationId: string,
-  contextMessages: RunAgentInput["messages"]
+  contextMessages: Array<{ role: string; content: string }>
 ) {
   const [run] = await db
     .insert(agentRuns)
@@ -106,6 +105,32 @@ async function createAgentRun(
     .returning();
 
   return run;
+}
+
+async function loadConversationContextMessages(
+  tenantId: string,
+  conversationId: string,
+  limit: number
+) {
+  if (limit <= 0) return [];
+
+  const recentMessages = await db
+    .select({
+      role: agentMessages.role,
+      content: agentMessages.content,
+      createdAt: agentMessages.createdAt,
+    })
+    .from(agentMessages)
+    .where(
+      and(
+        eq(agentMessages.tenantId, tenantId),
+        eq(agentMessages.conversationId, conversationId)
+      )
+    )
+    .orderBy(desc(agentMessages.createdAt))
+    .limit(limit);
+
+  return recentMessages.reverse().map(({ role, content }) => ({ role, content }));
 }
 
 async function saveMessage(
@@ -357,42 +382,32 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
   if (!canUseAgent(input.userRole)) {
     throw new Error("当前账号角色不能使用 Agent。");
   }
+
+  const agent = await getActiveTenantAgent(input.tenantId);
+  if (!agent) {
+    return buildAgentDisabledResult();
+  }
+
   const channelAuthorization = authorizeAgentChannel(planPolicy, input.channel);
   if (!channelAuthorization.allowed) {
     throw new Error(channelAuthorization.reason);
   }
 
+  const conversation = await getOrCreateConversation(input, agent.id);
+  await saveMessage(input.tenantId, conversation.id, "user", input.message);
+  const contextMessages = await loadConversationContextMessages(
+    input.tenantId,
+    conversation.id,
+    planPolicy.contextMessageLimit
+  );
+  const initialUsageCredits = getInitialAgentUsageCredits();
+
   await ensureAgentCreditsAvailable(
     input.tenantId,
     planPolicy,
-    AGENT_RUN_CREDIT_COST + AGENT_PLANNER_CREDIT_COST
+    initialUsageCredits.totalCredits
   );
 
-  const agent = await getActiveTenantAgent(input.tenantId);
-  if (!agent) {
-    return {
-      conversationId: "",
-      runId: "",
-      status: "failed",
-      intent: "agent_disabled",
-      reply:
-        "这个团队还没有启用 Hemera Agent。请团队管理员先启用数字员工，启用后成员就可以在这里继续对话和查询任务。",
-      toolCalls: [],
-      cards: [
-        {
-          kind: "status",
-          title: "Hemera Agent",
-          status: "未启用",
-          detail: "team_admin 可以在 Agent 状态中启用团队数字员工。",
-        },
-      ],
-    };
-  }
-  const conversation = await getOrCreateConversation(input, agent.id);
-  const contextMessages = trimAgentContextMessages(
-    input.messages || [],
-    planPolicy.contextMessageLimit
-  );
   const run = await createAgentRun(input, agent.id, conversation.id, contextMessages);
   const context: AgentContext = {
     tenantId: input.tenantId,
@@ -405,9 +420,8 @@ export async function runAgent(input: RunAgentInput): Promise<AgentRunResult> {
     runId: run.id,
   };
 
-  await recordAgentRunUsage(context, AGENT_RUN_CREDIT_COST);
-  await saveMessage(input.tenantId, conversation.id, "user", input.message);
-  await recordAgentPlannerUsage(context, AGENT_PLANNER_CREDIT_COST);
+  await recordAgentRunUsage(context, initialUsageCredits.conversationCredits);
+  await recordAgentPlannerUsage(context, initialUsageCredits.plannerCredits);
 
   const plan = await planAgentResponseWithModel(input.message);
   if (!isAgentIntentAllowed(planPolicy, plan.intent)) {

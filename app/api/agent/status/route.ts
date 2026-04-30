@@ -67,3 +67,19 @@ export async function PATCH(request: Request) {
     return handleApiError(error);
   }
 }
+
+export async function DELETE() {
+  try {
+    const { user, tenantId } = await requireTenant();
+    const userRole = normalizeAgentRole(user.role);
+    if (!canManageAgent(userRole)) return apiError("Only team admins can disable Agent", 403);
+
+    const agent = await getActiveTenantAgent(tenantId);
+    if (!agent) return apiResponse({ agent: null, enabled: false });
+
+    const updatedAgent = await updateTenantAgent(tenantId, agent.id, { isActive: false });
+    return apiResponse({ agent: updatedAgent, enabled: false });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

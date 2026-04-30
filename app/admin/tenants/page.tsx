@@ -19,18 +19,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type Plan = "free" | "pro" | "enterprise";
+type Plan = "free" | "pro" | "business" | "enterprise";
 
 interface Tenant {
   id: string;
   name: string;
   plan: Plan;
   apiQuota: number | null;
+  agentCreditsUsed: number;
+  agentCreditsLimit: number;
   stripeCustomerId: string | null;
   createdAt: string;
 }
 
-const PLAN_OPTIONS: Plan[] = ["free", "pro", "enterprise"];
+const PLAN_OPTIONS: Plan[] = ["free", "pro", "business", "enterprise"];
 
 export default function AdminTenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -82,6 +84,7 @@ export default function AdminTenantsPage() {
               <TableHead>当前套餐</TableHead>
               <TableHead>修改套餐</TableHead>
               <TableHead>API 配额</TableHead>
+              <TableHead>本月 Agent Credits</TableHead>
               <TableHead>Stripe ID</TableHead>
               <TableHead>创建时间</TableHead>
             </TableRow>
@@ -128,6 +131,9 @@ export default function AdminTenantsPage() {
                   </div>
                 </TableCell>
                 <TableCell>{tenant.apiQuota || "—"}</TableCell>
+                <TableCell>
+                  {tenant.agentCreditsUsed || 0} / {tenant.agentCreditsLimit}
+                </TableCell>
                 <TableCell className="font-mono text-xs">
                   {tenant.stripeCustomerId?.slice(0, 8) || "—"}
                 </TableCell>
@@ -145,6 +151,7 @@ export default function AdminTenantsPage() {
 
 function getPlanBadgeVariant(plan: Plan) {
   if (plan === "enterprise") return "default";
+  if (plan === "business") return "secondary";
   if (plan === "pro") return "secondary";
   return "outline";
 }

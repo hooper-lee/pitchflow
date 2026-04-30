@@ -75,6 +75,20 @@ export default function AgentSettingsPage() {
     }
   }
 
+  async function disableAgent() {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/agent/status", { method: "DELETE" });
+      if (!response.ok) throw new Error("停用失败");
+      await loadAgentStatus();
+      toast({ title: "Hemera Agent 已停用" });
+    } catch {
+      toast({ title: "停用失败", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createBindingCode(channel: "feishu" | "wecom") {
     setSaving(true);
     try {
@@ -157,7 +171,7 @@ export default function AgentSettingsPage() {
               disabled={!canManage || saving}
               onCheckedChange={(checked) => {
                 if (checked) void enableAgent();
-                else void updateAgent({ isActive: false });
+                else void disableAgent();
               }}
             />
           </div>

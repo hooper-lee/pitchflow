@@ -47,7 +47,6 @@ type AgentMessage = {
 type AgentChatPayload = {
   message: string;
   conversationId?: string;
-  messages: Array<Pick<AgentMessage, "role" | "content">>;
 };
 
 type UnknownRecord = Record<string, unknown>;
@@ -188,17 +187,10 @@ function normalizeAssistantMessage(responseBody: unknown): AgentMessage {
   };
 }
 
-function buildChatPayload(
-  message: string,
-  messages: AgentMessage[],
-  conversationId?: string
-): AgentChatPayload {
+function buildChatPayload(message: string, conversationId?: string): AgentChatPayload {
   return {
     message,
     ...(conversationId ? { conversationId } : {}),
-    messages: messages
-      .filter((agentMessage) => agentMessage.id !== welcomeMessage.id)
-      .map(({ role, content }) => ({ role, content })),
   };
 }
 
@@ -220,13 +212,12 @@ function createErrorMessage(message: string): AgentMessage {
 
 async function requestAssistantMessage(
   message: string,
-  messages: AgentMessage[],
   conversationId?: string
 ) {
   const agentResponse = await fetch(AGENT_CHAT_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildChatPayload(message, messages, conversationId)),
+    body: JSON.stringify(buildChatPayload(message, conversationId)),
   });
 
   if (!agentResponse.ok) {
@@ -308,7 +299,6 @@ async function submitDraftMessage({
   try {
     const { assistantMessage, conversationId: nextConversationId } = await requestAssistantMessage(
       trimmedMessage,
-      nextMessages,
       conversationId
     );
     if (nextConversationId) setConversationId(nextConversationId);
@@ -393,12 +383,14 @@ function AgentMessageList({
 function AgentComposer({
   draftMessage,
   isSending,
+  disabled,
   onDraftChange,
   onDraftKeyDown,
   onSubmit,
 }: {
   draftMessage: string;
   isSending: boolean;
+  disabled: boolean;
   onDraftChange: (message: string) => void;
   onDraftKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -410,15 +402,15 @@ function AgentComposer({
           value={draftMessage}
           onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={onDraftKeyDown}
-          placeholder="输入问题，Shift + Enter 换行"
+          placeholder={disabled ? "团队尚未启用 Hemera Agent" : "输入问题，Shift + Enter 换行"}
           className="max-h-32 min-h-[44px] resize-none text-[13px]"
-          disabled={isSending}
+          disabled={isSending || disabled}
         />
         <Button
           type="submit"
           size="icon"
           aria-label="发送消息"
-          disabled={!draftMessage.trim() || isSending}
+          disabled={!draftMessage.trim() || isSending || disabled}
         >
           {isSending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -483,6 +475,7 @@ function AgentPanelWindow({
       <AgentComposer
         draftMessage={draftMessage}
         isSending={isSending}
+        disabled={!agentEnabled}
         onDraftChange={onDraftChange}
         onDraftKeyDown={onDraftKeyDown}
         onSubmit={onSubmit}

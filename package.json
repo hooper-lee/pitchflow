@@ -18,7 +18,8 @@
     "eval:email-template": "tsx scripts/eval-email-template.ts",
     "eval:email-template-ab": "tsx scripts/eval-email-template.ts --ab",
     "eval:email-qa": "tsx scripts/eval-email-template.ts --ab",
-    "eval:all-local": "npm run eval:icp-ab && npm run eval:discovery-search && npm run eval:email-template-ab"
+    "eval:all-local": "npm run eval:icp-ab && npm run eval:discovery-search && npm run eval:email-template-ab",
+    "test:agent-platform": "tsx scripts/test-agent-platform.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",

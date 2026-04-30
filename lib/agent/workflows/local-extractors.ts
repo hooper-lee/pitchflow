@@ -22,6 +22,35 @@ function extractCountry(message: string) {
   return matchedAlias?.[1];
 }
 
+function removeDiscoveryFiller(message: string) {
+  return message
+    .replace(/\d+\s*(个|家|条|封)?/g, "")
+    .replace(/(帮我|我要|我想|开始|创建|新增|挖掘|找|开发|客户|公司|品牌|精准挖掘|获客)/g, " ")
+    .replace(/[。！？!?]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitDiscoveryKeywords(message: string) {
+  const explicitKeywords = extractListValue(message, ["关键词", "搜索词"]);
+  if (explicitKeywords?.length) return explicitKeywords;
+
+  const country = extractCountry(message);
+  const cleanedMessage = removeDiscoveryFiller(message);
+  const phrases = cleanedMessage
+    .split(/[，,、；;\n]/)
+    .map((phrase) => phrase.trim())
+    .filter((phrase) => phrase.length >= 2);
+
+  const keywordCandidates = phrases.length > 0 ? phrases : [cleanedMessage].filter(Boolean);
+  if (country && keywordCandidates.length > 0) {
+    return keywordCandidates.map((keyword) =>
+      keyword.toLowerCase().includes(country.toLowerCase()) ? keyword : `${country} ${keyword}`
+    );
+  }
+  return keywordCandidates;
+}
+
 function extractColonValue(message: string, labels: string[]) {
   const escapedLabels = labels.join("|");
   return message.match(new RegExp(`(?:${escapedLabels})[:：]\\s*([^\\n，,。]+)`, "i"))?.[1]?.trim();
@@ -64,8 +93,7 @@ function extractIcpSlots(message: string) {
 function extractDiscoverySlots(message: string) {
   const targetLimit = extractNumber(message);
   const country = extractCountry(message);
-  const keywords = extractListValue(message, ["关键词", "搜索词"]);
-  const inferredKeywords = keywords || (message.length > 6 ? [message.replace(/\d+\s*(个|家|条)/g, "").trim()] : undefined);
+  const inferredKeywords = splitDiscoveryKeywords(message);
 
   return {
     name: extractColonValue(message, ["任务名称", "名称", "名字"]),

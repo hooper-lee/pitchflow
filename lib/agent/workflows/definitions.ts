@@ -27,6 +27,15 @@ function buildDefaultQuestion(title: string, missingSlots: string[]) {
   return `我在帮你处理「${title}」。先补充这两点就行：${describeMissingNeeds(missingSlots).join("、")}。可以直接用一句话说，不用按表单格式写。`;
 }
 
+function buildBusinessSummary(title: string, slots: Record<string, unknown>) {
+  const slotSummary = Object.entries(slots)
+    .filter(([, value]) => Boolean(value))
+    .slice(0, 4)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
+    .join("；");
+  return slotSummary ? `我将按这个业务摘要执行「${title}」：${slotSummary}` : `我将先创建「${title}」草稿，后续你可以继续补充。`;
+}
+
 function normalizeDiscoverySlots(slots: Record<string, unknown>) {
   const keywords = readStringArraySlot(slots, "keywords");
   const currentName = readStringSlot(slots, "name");
@@ -51,17 +60,24 @@ function normalizeIcpSlots(slots: Record<string, unknown>) {
 }
 
 function normalizeCampaignSlots(slots: Record<string, unknown>) {
+  const industry = readStringSlot(slots, "industry");
+  const campaignType = readStringSlot(slots, "campaignType") === "reply_followup" ? "reply_followup" : "cold_outreach";
   return {
     ...slots,
-    name: readStringSlot(slots, "name") || "Agent 创建的活动草稿",
-    campaignType: readStringSlot(slots, "campaignType") === "reply_followup" ? "reply_followup" : "cold_outreach",
+    name: readStringSlot(slots, "name") || `${industry || "Agent"} ${campaignType === "reply_followup" ? "回复跟进" : "冷启动"}活动`,
+    campaignType,
   };
 }
 
 function normalizeTemplateSlots(slots: Record<string, unknown>) {
+  const angle = readStringSlot(slots, "angle");
   return {
     ...slots,
     name: readStringSlot(slots, "name") || "Agent 创建的邮件策略",
+    subject: readStringSlot(slots, "subject") || `${angle || "Quick question"} for {{companyName}}`,
+    body:
+      readStringSlot(slots, "body") ||
+      "Hi {{contactName}},\n\nI noticed {{companyName}} and wanted to share a relevant idea around {{productName}}.\n\nIf this is a current priority, would it make sense to compare notes this week?\n\nBest,\n{{senderName}}",
   };
 }
 
@@ -111,6 +127,7 @@ export const workflowDefinitions: WorkflowDefinition[] = [
       country: readStringSlot(slots, "country") || undefined,
       targetLimit: readNumberSlot(slots, "targetLimit") || 20,
     }),
+    buildSummary: (slots) => buildBusinessSummary("精准挖掘任务", slots),
     buildQuestion: (missingSlots) =>
       `可以，我来帮你创建精准挖掘任务。先告诉我：${describeMissingNeeds(missingSlots).join("、")}。例如“美国宠物用品 DTC 品牌，找 50 个”。`,
   },
@@ -118,7 +135,7 @@ export const workflowDefinitions: WorkflowDefinition[] = [
     goal: "setup_email_template",
     title: "邮件策略创建",
     toolName: "pitchflow.template.create_draft",
-    requiredSlots: ["subject", "body"],
+    requiredSlots: [],
     optionalSlots: ["name", "angle"],
     startIntents: ["setup_email_template"],
     normalizeSlots: normalizeTemplateSlots,
@@ -128,13 +145,14 @@ export const workflowDefinitions: WorkflowDefinition[] = [
       body: readStringSlot(slots, "body"),
       angle: readStringSlot(slots, "angle") || undefined,
     }),
+    buildSummary: (slots) => buildBusinessSummary("邮件策略草稿", slots),
     buildQuestion: (missingSlots) => buildDefaultQuestion("邮件策略创建", missingSlots),
   },
   {
     goal: "create_campaign",
     title: "活动草稿创建",
     toolName: "pitchflow.campaign.create_draft",
-    requiredSlots: ["name"],
+    requiredSlots: [],
     optionalSlots: ["industry", "campaignType"],
     startIntents: ["create_campaign"],
     normalizeSlots: normalizeCampaignSlots,
@@ -143,6 +161,7 @@ export const workflowDefinitions: WorkflowDefinition[] = [
       industry: readStringSlot(slots, "industry") || undefined,
       campaignType: readStringSlot(slots, "campaignType") || "cold_outreach",
     }),
+    buildSummary: (slots) => buildBusinessSummary("活动草稿", slots),
     buildQuestion: (missingSlots) => buildDefaultQuestion("活动草稿创建", missingSlots),
   },
   {
