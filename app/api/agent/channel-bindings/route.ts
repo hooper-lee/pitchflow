@@ -12,6 +12,9 @@ export async function POST(request: Request) {
   try {
     const { user, tenantId } = await requireTenant();
     const body = bindingCodeSchema.parse(await request.json());
+    if (body.channel === "wecom") {
+      return apiError("WeCom channel is not supported yet. Please use Feishu.", 400);
+    }
     if (body.channel === "feishu") {
       const feishuConfig = await getAgentChannelConfig(tenantId, "feishu");
       if (!feishuConfig?.isEnabled || !isFeishuChannelReady(feishuConfig)) {

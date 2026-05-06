@@ -29,13 +29,26 @@ type SafeChannelConfig = {
 };
 
 const defaultAgentName = "Hemera Agent";
+const feishuSetupSteps = [
+  {
+    title: "1. 团队管理员配置飞书机器人",
+    description: "填写 App ID、App Secret 和事件订阅 Signing Secret，保存后系统会生成当前团队专属 URL。",
+  },
+  {
+    title: "2. 复制事件订阅 URL 到飞书开放平台",
+    description: "URL 由系统自动生成，不需要手填。复制后粘贴到飞书应用的事件订阅配置里。",
+  },
+  {
+    title: "3. 成员绑定个人飞书账号",
+    description: "成员生成绑定码，在机器人私聊里发送 bind + 绑定码，用于匹配 PitchFlow 用户权限和审计记录。",
+  },
+];
 
 export default function AgentSettingsPage() {
   const { toast } = useToast();
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [agentName, setAgentName] = useState(defaultAgentName);
   const [bindingCode, setBindingCode] = useState("");
-  const [bindingChannel, setBindingChannel] = useState<"feishu" | "wecom">("feishu");
   const [feishuConfig, setFeishuConfig] = useState<SafeChannelConfig | null>(null);
   const [feishuForm, setFeishuForm] = useState({
     name: "飞书机器人",
@@ -123,23 +136,33 @@ export default function AgentSettingsPage() {
     }
   }
 
-  async function createBindingCode(channel: "feishu" | "wecom") {
+  async function createFeishuBindingCode() {
     setSaving(true);
     try {
       const response = await fetch("/api/agent/channel-bindings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel }),
+        body: JSON.stringify({ channel: "feishu" }),
       });
       if (!response.ok) throw new Error("生成绑定码失败");
       const body = await response.json();
-      setBindingChannel(channel);
       setBindingCode(body.data?.bindingCode || "");
       toast({ title: "绑定码已生成，15 分钟内有效" });
     } catch {
       toast({ title: "生成绑定码失败", variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function copyFeishuWebhookUrl() {
+    if (!feishuConfig?.webhookUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(feishuConfig.webhookUrl);
+      toast({ title: "飞书事件订阅 URL 已复制" });
+    } catch {
+      toast({ title: "复制失败，请手动复制", variant: "destructive" });
     }
   }
 
@@ -258,12 +281,34 @@ export default function AgentSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>飞书机器人配置</CardTitle>
+          <CardTitle>飞书接入</CardTitle>
           <CardDescription>
-            每个团队配置自己的飞书机器人。保存后，把专属 Webhook URL 填到飞书开放平台事件订阅里。
+            一个团队只需要配置一次飞书机器人；成员再绑定自己的飞书账号。
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-3">
+            {feishuSetupSteps.map((step) => (
+              <div key={step.title} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <p className="font-medium">{step.title}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium">团队飞书机器人配置</p>
+                <p className="text-sm text-muted-foreground">
+                  需要团队管理员配置。企微接入尚未开放，当前只支持飞书。
+                </p>
+              </div>
+              <Badge variant={feishuReady ? "secondary" : "outline"}>
+                {feishuReady ? "已就绪" : "待配置"}
+              </Badge>
+            </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="feishuName">机器人名称</Label>
@@ -322,17 +367,25 @@ export default function AgentSettingsPage() {
             />
           </div>
 
-          {feishuConfig?.webhookUrl ? (
-            <div className="space-y-2">
-              <Label>飞书事件订阅 URL</Label>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 font-mono text-sm break-all">
-                {feishuConfig.webhookUrl}
+          <div className="space-y-2">
+            <Label>系统生成的飞书事件订阅 URL</Label>
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="font-mono text-sm break-all text-slate-700">
+                {feishuConfig?.webhookUrl || "保存飞书配置后自动生成当前团队专属 URL"}
               </div>
-              <p className="text-xs text-muted-foreground">
-                这个 URL 是当前团队专属地址，不要填系统级固定地址。
-              </p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!feishuConfig?.webhookUrl}
+                onClick={() => void copyFeishuWebhookUrl()}
+              >
+                复制 URL
+              </Button>
             </div>
-          ) : null}
+            <p className="text-xs text-muted-foreground">
+              这个 URL 不是让用户填写的字段，而是系统自动生成；需要复制到飞书开放平台的事件订阅配置里。
+            </p>
+          </div>
 
           <div className="flex justify-end">
             <Button type="button" disabled={!canManage || saving} onClick={() => void saveFeishuConfig()}>
@@ -340,36 +393,23 @@ export default function AgentSettingsPage() {
               保存飞书配置
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>飞书 / 企业微信账号绑定</CardTitle>
-          <CardDescription>
-            成员可以生成自己的绑定码，在机器人私聊里发送 bind + 绑定码，完成外部账号绑定。
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-muted-foreground">
-            私聊 Agent 入口需要 Business 或更高套餐。群聊当前只做通知，不允许执行写操作。
           </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-4">
+              <p className="font-medium">个人飞书账号绑定</p>
+              <p className="text-sm text-muted-foreground">
+                私聊 Agent 入口需要 Business 或更高套餐。成员绑定后，系统才能识别操作人、权限和审计归属。
+              </p>
+            </div>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant={bindingChannel === "feishu" ? "default" : "outline"}
+              variant="default"
               disabled={saving || !enabled || !feishuReady}
-              onClick={() => void createBindingCode("feishu")}
+              onClick={() => void createFeishuBindingCode()}
             >
               生成飞书绑定码
-            </Button>
-            <Button
-              type="button"
-              variant={bindingChannel === "wecom" ? "default" : "outline"}
-              disabled={saving || !enabled}
-              onClick={() => void createBindingCode("wecom")}
-            >
-              生成企微绑定码
             </Button>
           </div>
           {!feishuReady ? (
@@ -384,10 +424,11 @@ export default function AgentSettingsPage() {
                 bind {bindingCode}
               </div>
               <p className="text-xs text-muted-foreground">
-                当前绑定渠道：{bindingChannel === "feishu" ? "飞书" : "企业微信"}，有效期 15 分钟。
+                当前绑定渠道：飞书，有效期 15 分钟。
               </p>
             </div>
           ) : null}
+          </div>
         </CardContent>
       </Card>
     </div>
