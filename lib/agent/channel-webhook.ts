@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { runAgent } from "@/lib/agent/runtime";
+import type { AgentChannelRuntimeConfig } from "@/lib/agent/channel-configs";
 import { sendFeishuPrivateReply, sendWeComPrivateReply } from "@/lib/agent/channel-clients";
 import { getConfig } from "@/lib/services/config.service";
 import {
@@ -31,9 +32,10 @@ export async function verifyChannelWebhookSignature(
   channel: ChannelName,
   rawBody: string,
   headers: Headers,
-  requestUrl?: URL
+  requestUrl?: URL,
+  channelConfig?: AgentChannelRuntimeConfig | null
 ) {
-  if (channel === "feishu") return verifyFeishuSignature(rawBody, headers);
+  if (channel === "feishu") return verifyFeishuSignature(rawBody, headers, channelConfig);
   return verifyWeComSignature(rawBody, headers, requestUrl);
 }
 
@@ -42,8 +44,12 @@ function safeEqual(left: string, right: string) {
   return crypto.timingSafeEqual(Buffer.from(left), Buffer.from(right));
 }
 
-async function verifyFeishuSignature(rawBody: string, headers: Headers) {
-  const secret = await getWebhookSecret("feishu");
+async function verifyFeishuSignature(
+  rawBody: string,
+  headers: Headers,
+  channelConfig?: AgentChannelRuntimeConfig | null
+) {
+  const secret = channelConfig?.webhookSecret || await getWebhookSecret("feishu");
   if (!secret) return false;
   const timestamp = headers.get("x-lark-request-timestamp") || "";
   const nonce = headers.get("x-lark-request-nonce") || "";
@@ -163,9 +169,14 @@ export async function handleChannelAgentMessage(
   return result.reply;
 }
 
-export async function sendChannelReply(channel: ChannelName, message: StandardChannelMessage, text: string) {
+export async function sendChannelReply(
+  channel: ChannelName,
+  message: StandardChannelMessage,
+  text: string,
+  channelConfig?: AgentChannelRuntimeConfig | null
+) {
   if (channel === "feishu" && message.externalOpenId) {
-    await sendFeishuPrivateReply(message.externalOpenId, text);
+    await sendFeishuPrivateReply(message.externalOpenId, text, channelConfig || undefined);
     return;
   }
   if (channel === "wecom" && message.externalUserId) {

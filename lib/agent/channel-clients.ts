@@ -12,7 +12,7 @@ type WeComTokenResponse = {
   expires_in?: number;
 };
 
-let feishuTokenCache: { token: string; expiresAt: number } | null = null;
+const feishuTokenCache = new Map<string, { token: string; expiresAt: number }>();
 let wecomTokenCache: { token: string; expiresAt: number } | null = null;
 
 function isTokenValid(cache: { token: string; expiresAt: number } | null) {
@@ -25,11 +25,12 @@ async function fetchJson<T>(url: string, init: RequestInit) {
   return (await response.json()) as T;
 }
 
-async function getFeishuTenantAccessToken() {
-  if (isTokenValid(feishuTokenCache)) return feishuTokenCache!.token;
-  const appId = await getRuntimeConfig("FEISHU_APP_ID");
-  const appSecret = await getRuntimeConfig("FEISHU_APP_SECRET");
+async function getFeishuTenantAccessToken(config?: { appId?: string | null; appSecret?: string | null }) {
+  const appId = config?.appId || await getRuntimeConfig("FEISHU_APP_ID");
+  const appSecret = config?.appSecret || await getRuntimeConfig("FEISHU_APP_SECRET");
   if (!appId || !appSecret) throw new Error("FEISHU_APP_ID/FEISHU_APP_SECRET is not configured");
+  const cachedToken = feishuTokenCache.get(appId);
+  if (isTokenValid(cachedToken || null)) return cachedToken!.token;
 
   const tokenResponse = await fetchJson<FeishuTokenResponse>(
     "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
@@ -40,11 +41,11 @@ async function getFeishuTenantAccessToken() {
     }
   );
   if (!tokenResponse.tenant_access_token) throw new Error(tokenResponse.msg || "Feishu token failed");
-  feishuTokenCache = {
+  feishuTokenCache.set(appId, {
     token: tokenResponse.tenant_access_token,
     expiresAt: Date.now() + (tokenResponse.expire || 3600) * 1000,
-  };
-  return feishuTokenCache.token;
+  });
+  return tokenResponse.tenant_access_token;
 }
 
 async function getWeComAccessToken() {
@@ -65,8 +66,12 @@ async function getWeComAccessToken() {
   return wecomTokenCache.token;
 }
 
-export async function sendFeishuPrivateReply(openId: string, text: string) {
-  const token = await getFeishuTenantAccessToken();
+export async function sendFeishuPrivateReply(
+  openId: string,
+  text: string,
+  config?: { appId?: string | null; appSecret?: string | null }
+) {
+  const token = await getFeishuTenantAccessToken(config);
   await fetchJson("https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id", {
     method: "POST",
     headers: {

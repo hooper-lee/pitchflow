@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { requireTenant } from "@/lib/auth";
+import { getAgentChannelConfig, isFeishuChannelReady } from "@/lib/agent/channel-configs";
 import { createChannelBindingCode } from "@/lib/agent/channel-bindings";
-import { canManageAgent } from "@/lib/agent/policies/role-policy";
-import { normalizeAgentRole } from "@/lib/agent/permissions";
 import { apiError, apiResponse, handleApiError } from "@/lib/utils/api-handler";
 
 const bindingCodeSchema = z.object({
@@ -12,10 +11,13 @@ const bindingCodeSchema = z.object({
 export async function POST(request: Request) {
   try {
     const { user, tenantId } = await requireTenant();
-    const userRole = normalizeAgentRole(user.role);
-    if (!canManageAgent(userRole)) return apiError("Only team admins can create binding codes", 403);
-
     const body = bindingCodeSchema.parse(await request.json());
+    if (body.channel === "feishu") {
+      const feishuConfig = await getAgentChannelConfig(tenantId, "feishu");
+      if (!feishuConfig?.isEnabled || !isFeishuChannelReady(feishuConfig)) {
+        return apiError("Feishu channel is not configured", 400);
+      }
+    }
     const bindingCode = createChannelBindingCode({
       tenantId,
       userId: user.id,

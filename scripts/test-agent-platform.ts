@@ -6,6 +6,7 @@ import { authorizeAgentWorkflow } from "@/lib/agent/policies/workflow-policy";
 import { buildAgentDisabledResult } from "@/lib/agent/runtime-results";
 import { createChannelBindingCode, parseChannelBindingCode } from "@/lib/agent/channel-bindings";
 import { extractChannelBindingCode } from "@/lib/agent/channel-webhook";
+import { planAgentResponse } from "@/lib/agent/planner";
 import { handleWorkflowTurn } from "@/lib/agent/workflows/engine";
 
 function testPlanAndChannelPolicy() {
@@ -79,6 +80,13 @@ function testBindingCodeWhitespaceTolerance() {
   assert.equal(parseChannelBindingCode(extractedCode || "").channel, "feishu");
 }
 
+function testNextActionPlanning() {
+  const plan = planAgentResponse("我现在接下来应该做什么？");
+
+  assert.equal(plan.intent, "next_action");
+  assert.equal(plan.toolCall?.toolName, "pitchflow.strategy.next_action");
+}
+
 function runAgentPlatformTests() {
   testPlanAndChannelPolicy();
   testDisabledAgentResult();
@@ -86,6 +94,7 @@ function runAgentPlatformTests() {
   testDiscoveryWorkflowExtraction();
   testGoalDrivenDraftWorkflows();
   testBindingCodeWhitespaceTolerance();
+  testNextActionPlanning();
   console.log("Agent platform tests passed");
 }
 

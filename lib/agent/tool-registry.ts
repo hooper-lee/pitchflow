@@ -7,11 +7,13 @@ import { mailAccountTools } from "@/lib/agent/toolkits/pitchflow/mail-account.to
 import { productProfileTools } from "@/lib/agent/toolkits/pitchflow/product-profile.tools";
 import { prospectTools } from "@/lib/agent/toolkits/pitchflow/prospect.tools";
 import { pitchflowSetupTools } from "@/lib/agent/toolkits/pitchflow/setup.tools";
+import { nextActionTools } from "@/lib/agent/toolkits/pitchflow/next-action.tools";
 import { templateTools } from "@/lib/agent/toolkits/pitchflow/template.tools";
 import { pitchflowWriteTools } from "@/lib/agent/toolkits/pitchflow/write.tools";
 
 const registeredTools: AgentTool[] = [
   ...pitchflowSetupTools,
+  ...nextActionTools,
   ...productProfileTools,
   ...mailAccountTools,
   ...icpTools,

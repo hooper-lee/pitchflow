@@ -343,6 +343,7 @@ Return JSON with this exact shape:
 
 Rules:
 - Do not choose backend tools.
+- For "下一步做什么", "接下来做什么", "现在该干嘛", "怎么推进", use intent "next_action".
 - Prefer action/workflow intent when the user says short action phrases like "挖掘客户", "找客户", "设置产品资料", "创建活动".
 - Use list/view intents only when the user explicitly asks to view, list, check status, progress, history, or statistics.
 - Extract obvious parameters into slots, but do not invent missing values.

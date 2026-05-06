@@ -492,6 +492,33 @@ export const agentChannelBindings = pgTable(
   })
 );
 
+export const agentChannelConfigs = pgTable(
+  "agent_channel_configs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    channel: agentChannelEnum("channel").notNull(),
+    name: varchar("name", { length: 255 }),
+    appId: varchar("app_id", { length: 255 }),
+    appSecret: text("app_secret"),
+    webhookSecret: text("webhook_secret"),
+    isEnabled: boolean("is_enabled").default(false).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    tenantIdx: index("agent_channel_configs_tenant_idx").on(table.tenantId),
+    channelIdx: index("agent_channel_configs_channel_idx").on(table.channel),
+    tenantChannelUnique: unique("agent_channel_configs_tenant_channel_unique").on(
+      table.tenantId,
+      table.channel
+    ),
+  })
+);
+
 // ── Business tables ────────────────────────────────────
 
 export const emailTemplates = pgTable(

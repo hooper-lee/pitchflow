@@ -43,6 +43,7 @@ const highLevelIntents = [
   "summarize_campaign",
   "summarize_discovery_candidates",
   "start_campaign",
+  "next_action",
   "general_guidance",
 ] as const;
 
@@ -113,6 +114,13 @@ function mapIntentToPlan(
 
   if (normalizedIntent === "check_readiness") {
     return planTool(normalizedIntent, reply, "pitchflow.setup.check_readiness");
+  }
+  if (normalizedIntent === "next_action") {
+    return planTool(
+      normalizedIntent,
+      reply || "我先读取当前获客链路状态，再判断此刻最该推进的动作。",
+      "pitchflow.strategy.next_action"
+    );
   }
   if (normalizedIntent === "view_product_profile") {
     return planTool(normalizedIntent, reply, "pitchflow.product_profile.get");
@@ -206,6 +214,21 @@ export function planAgentResponse(message: string): AgentPlanResult {
   const shouldCheckReadiness = readinessKeywords.some((keyword) =>
     normalizedMessage.includes(keyword.toLowerCase())
   );
+  const shouldPlanNextAction =
+    normalizedMessage.includes("下一步") ||
+    normalizedMessage.includes("接下来") ||
+    normalizedMessage.includes("该做什么") ||
+    normalizedMessage.includes("应该做什么") ||
+    normalizedMessage.includes("下一步动作") ||
+    normalizedMessage.includes("怎么推进");
+
+  if (shouldPlanNextAction) {
+    return planTool(
+      "next_action",
+      "我先读取当前获客链路状态，再判断此刻最该推进的动作。",
+      "pitchflow.strategy.next_action"
+    );
+  }
 
   if (shouldCheckReadiness) {
     return planTool(
