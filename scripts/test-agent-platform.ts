@@ -4,6 +4,8 @@ import { authorizeAgentChannel } from "@/lib/agent/policies/channel-policy";
 import { getAgentPlanPolicy } from "@/lib/agent/policies/plan-policy";
 import { authorizeAgentWorkflow } from "@/lib/agent/policies/workflow-policy";
 import { buildAgentDisabledResult } from "@/lib/agent/runtime-results";
+import { createChannelBindingCode, parseChannelBindingCode } from "@/lib/agent/channel-bindings";
+import { extractChannelBindingCode } from "@/lib/agent/channel-webhook";
 import { handleWorkflowTurn } from "@/lib/agent/workflows/engine";
 
 function testPlanAndChannelPolicy() {
@@ -63,13 +65,29 @@ function testGoalDrivenDraftWorkflows() {
   assert.match(String(campaignResult.reply), /业务摘要|草稿/);
 }
 
+function testBindingCodeWhitespaceTolerance() {
+  process.env.AGENT_BINDING_SECRET = process.env.AGENT_BINDING_SECRET || "local-agent-test-secret";
+  const code = createChannelBindingCode({
+    tenantId: "00000000-0000-4000-8000-000000000001",
+    userId: "00000000-0000-4000-8000-000000000002",
+    channel: "feishu",
+  });
+  const wrappedCode = `${code.slice(0, 40)}\n${code.slice(40, 90)} ${code.slice(90)}`;
+  const extractedCode = extractChannelBindingCode(`bind\n${wrappedCode}`);
+
+  assert.equal(extractedCode, code);
+  assert.equal(parseChannelBindingCode(extractedCode || "").channel, "feishu");
+}
+
 function runAgentPlatformTests() {
   testPlanAndChannelPolicy();
   testDisabledAgentResult();
   testInitialUsageCredits();
   testDiscoveryWorkflowExtraction();
   testGoalDrivenDraftWorkflows();
+  testBindingCodeWhitespaceTolerance();
   console.log("Agent platform tests passed");
 }
 
 runAgentPlatformTests();
+process.exit(0);

@@ -6,6 +6,7 @@ import {
   bindExternalAgentUser,
   findAgentChannelBinding,
   getBindingUser,
+  normalizeChannelBindingCode,
 } from "@/lib/agent/channel-bindings";
 import { normalizeAgentPlan, normalizeAgentRole } from "@/lib/agent/permissions";
 import { getTenant } from "@/lib/services/tenant.service";
@@ -114,6 +115,15 @@ function parseWeComXml(xml: string) {
   };
 }
 
+export function extractChannelBindingCode(text: string) {
+  const trimmedText = text.trim();
+  if (!/^bind\b/i.test(trimmedText)) return null;
+
+  const rawCode = trimmedText.replace(/^bind\b[:：]?\s*/i, "");
+  const normalizedCode = normalizeChannelBindingCode(rawCode);
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(normalizedCode) ? normalizedCode : null;
+}
+
 export async function handleChannelAgentMessage(
   channel: AgentChannel,
   channelMessage: StandardChannelMessage
@@ -124,10 +134,14 @@ export async function handleChannelAgentMessage(
   };
   if (channelMessage.isGroupChat) return "群聊当前只支持通知，不允许执行 Agent 操作。请私聊 Hemera Agent。";
 
-  const bindingCode = text.match(/bind\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i)?.[1];
+  const bindingCode = extractChannelBindingCode(text);
   if (bindingCode && (channel === "feishu" || channel === "wecom")) {
-    await bindExternalAgentUser({ code: bindingCode, externalUserId, externalOpenId, channel, metadata });
-    return "绑定成功。之后可以直接私聊 Hemera Agent 查询任务状态。";
+    try {
+      await bindExternalAgentUser({ code: bindingCode, externalUserId, externalOpenId, channel, metadata });
+      return "绑定成功。之后可以直接私聊 Hemera Agent 查询任务状态。";
+    } catch (error) {
+      return error instanceof Error ? error.message : "绑定码无效或已过期。";
+    }
   }
 
   const binding = await findAgentChannelBinding(channel, externalUserId);

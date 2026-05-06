@@ -43,6 +43,10 @@ export function parseChannelBindingCode(code: string): BindingTokenPayload {
   return payload;
 }
 
+export function normalizeChannelBindingCode(code: string) {
+  return code.replace(/\s+/g, "").trim();
+}
+
 export async function bindExternalAgentUser(input: {
   code: string;
   externalUserId: string;
