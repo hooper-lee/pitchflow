@@ -65,6 +65,15 @@ export async function getAgentChannelConfigById(configId: string, channel: "feis
   return config || null;
 }
 
+export async function listEnabledFeishuChannelConfigs() {
+  const configs = await db
+    .select()
+    .from(agentChannelConfigs)
+    .where(and(eq(agentChannelConfigs.channel, "feishu"), eq(agentChannelConfigs.isEnabled, true)));
+
+  return configs.filter(isFeishuChannelReady);
+}
+
 export async function upsertAgentChannelConfig(
   tenantId: string,
   channel: "feishu" | "wecom",
@@ -97,5 +106,5 @@ export async function upsertAgentChannelConfig(
 }
 
 export function isFeishuChannelReady(config: AgentChannelRuntimeConfig | null) {
-  return Boolean(config?.appId && config.appSecret && config.webhookSecret);
+  return Boolean(config?.appId && config.appSecret);
 }

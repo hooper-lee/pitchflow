@@ -8,6 +8,8 @@ async function startWorkers() {
   await import("@/lib/queue/workers/research.worker");
   await import("@/lib/queue/workers/alert.worker");
   await import("@/lib/queue/workers/discovery.worker");
+  const { startFeishuLongConnectionSync } = await import("@/lib/agent/feishu-long-connection");
+  await startFeishuLongConnectionSync();
 }
 
 function logWorkerStartup() {

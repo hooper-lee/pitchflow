@@ -7,6 +7,25 @@ import {
   verifyChannelWebhookSignature,
 } from "@/lib/agent/channel-webhook";
 
+export async function handleFeishuEventData(
+  eventData: Record<string, unknown>,
+  channelConfig?: AgentChannelRuntimeConfig | null
+) {
+  const channelMessage = readFeishuChannelMessage({ event: eventData });
+  if (!channelMessage.externalUserId || !channelMessage.text) {
+    console.warn("Invalid Feishu event message", {
+      hasExternalUserId: Boolean(channelMessage.externalUserId),
+      hasText: Boolean(channelMessage.text),
+    });
+    return;
+  }
+
+  const reply = await handleChannelAgentMessage("feishu", channelMessage);
+  await sendChannelReply("feishu", channelMessage, reply, channelConfig).catch((error) => {
+    console.error("Feishu reply failed:", error);
+  });
+}
+
 export async function handleFeishuChannelWebhook(
   request: NextRequest,
   channelConfig?: AgentChannelRuntimeConfig | null
@@ -24,15 +43,12 @@ export async function handleFeishuChannelWebhook(
     return NextResponse.json({ error: "Invalid Feishu signature" }, { status: 403 });
   }
 
-  const channelMessage = readFeishuChannelMessage(body);
-  if (!channelMessage.externalUserId || !channelMessage.text) {
+  const eventData = body.event as Record<string, unknown> | undefined;
+  if (!eventData) {
     return NextResponse.json({ error: "Invalid Feishu message" }, { status: 400 });
   }
 
-  const reply = await handleChannelAgentMessage("feishu", channelMessage);
-  await sendChannelReply("feishu", channelMessage, reply, channelConfig).catch((error) => {
-    console.error("Feishu reply failed:", error);
-  });
+  await handleFeishuEventData(eventData, channelConfig);
 
-  return NextResponse.json({ reply });
+  return NextResponse.json({ ok: true });
 }

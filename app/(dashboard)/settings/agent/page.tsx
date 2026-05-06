@@ -23,20 +23,18 @@ type SafeChannelConfig = {
   name: string;
   appId: string;
   appSecretMasked: string;
-  webhookSecretMasked: string;
   isEnabled: boolean;
-  webhookUrl: string;
 };
 
 const defaultAgentName = "Hemera Agent";
 const feishuSetupSteps = [
   {
     title: "1. 团队管理员配置飞书机器人",
-    description: "填写 App ID、App Secret 和事件订阅 Signing Secret，保存后系统会生成当前团队专属 URL。",
+    description: "填写 App ID 和 App Secret，PitchFlow worker 会用长连接接收飞书事件。",
   },
   {
-    title: "2. 复制事件订阅 URL 到飞书开放平台",
-    description: "URL 由系统自动生成，不需要手填。复制后粘贴到飞书应用的事件订阅配置里。",
+    title: "2. 飞书后台选择长连接订阅事件",
+    description: "在飞书开放平台的事件与回调里选择长连接模式，不需要填写公网回调 URL。",
   },
   {
     title: "3. 成员绑定个人飞书账号",
@@ -54,7 +52,6 @@ export default function AgentSettingsPage() {
     name: "飞书机器人",
     appId: "",
     appSecret: "",
-    webhookSecret: "",
     isEnabled: false,
   });
   const [saving, setSaving] = useState(false);
@@ -77,7 +74,6 @@ export default function AgentSettingsPage() {
       name: config?.name || currentForm.name,
       appId: config?.appId || "",
       appSecret: "",
-      webhookSecret: "",
       isEnabled: Boolean(config?.isEnabled),
     }));
   }
@@ -155,17 +151,6 @@ export default function AgentSettingsPage() {
     }
   }
 
-  async function copyFeishuWebhookUrl() {
-    if (!feishuConfig?.webhookUrl) return;
-
-    try {
-      await navigator.clipboard.writeText(feishuConfig.webhookUrl);
-      toast({ title: "飞书事件订阅 URL 已复制" });
-    } catch {
-      toast({ title: "复制失败，请手动复制", variant: "destructive" });
-    }
-  }
-
   async function saveFeishuConfig() {
     setSaving(true);
     try {
@@ -186,7 +171,7 @@ export default function AgentSettingsPage() {
 
   const canManage = Boolean(agentStatus?.canManage);
   const enabled = Boolean(agentStatus?.enabled);
-  const feishuReady = Boolean(feishuConfig?.isEnabled && feishuConfig.appId && feishuConfig.webhookUrl);
+  const feishuReady = Boolean(feishuConfig?.isEnabled && feishuConfig.appId && feishuConfig.appSecretMasked);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -283,7 +268,7 @@ export default function AgentSettingsPage() {
         <CardHeader>
           <CardTitle>飞书接入</CardTitle>
           <CardDescription>
-            一个团队只需要配置一次飞书机器人；成员再绑定自己的飞书账号。
+            一个团队只需要配置一次飞书机器人；PitchFlow 通过飞书长连接接收消息，成员再绑定自己的飞书账号。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -301,7 +286,7 @@ export default function AgentSettingsPage() {
               <div>
                 <p className="font-medium">团队飞书机器人配置</p>
                 <p className="text-sm text-muted-foreground">
-                  需要团队管理员配置。企微接入尚未开放，当前只支持飞书。
+                  需要团队管理员配置。当前使用飞书长连接，不需要配置事件订阅 URL 或 Signing Secret。
                 </p>
               </div>
               <Badge variant={feishuReady ? "secondary" : "outline"}>
@@ -340,24 +325,13 @@ export default function AgentSettingsPage() {
                 placeholder={feishuConfig?.appSecretMasked || "保存后不再明文展示"}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="feishuWebhookSecret">事件订阅 Signing Secret</Label>
-              <Input
-                id="feishuWebhookSecret"
-                type="password"
-                value={feishuForm.webhookSecret}
-                disabled={!canManage || saving}
-                onChange={(event) => setFeishuForm((form) => ({ ...form, webhookSecret: event.target.value }))}
-                placeholder={feishuConfig?.webhookSecretMasked || "用于校验飞书回调签名"}
-              />
-            </div>
           </div>
 
           <div className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
             <div>
               <p className="font-medium">启用飞书私聊入口</p>
               <p className="text-sm text-muted-foreground">
-                启用后，飞书事件会进入当前团队的 Hemera Agent。
+                启用后，worker 会通过飞书长连接接收消息并进入当前团队的 Hemera Agent。
               </p>
             </div>
             <Switch
@@ -367,24 +341,9 @@ export default function AgentSettingsPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>系统生成的飞书事件订阅 URL</Label>
-            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 md:flex-row md:items-center md:justify-between">
-              <div className="font-mono text-sm break-all text-slate-700">
-                {feishuConfig?.webhookUrl || "保存飞书配置后自动生成当前团队专属 URL"}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!feishuConfig?.webhookUrl}
-                onClick={() => void copyFeishuWebhookUrl()}
-              >
-                复制 URL
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              这个 URL 不是让用户填写的字段，而是系统自动生成；需要复制到飞书开放平台的事件订阅配置里。
-            </p>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-muted-foreground">
+            飞书后台操作指引：进入应用的「事件与回调」，订阅方式选择「使用长连接接收事件」，
+            然后添加「接收消息」事件。PitchFlow 不再要求用户填写公网回调 URL。
           </div>
 
           <div className="flex justify-end">
