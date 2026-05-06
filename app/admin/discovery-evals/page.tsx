@@ -380,8 +380,17 @@ function getSearchSourceCount(result: DiscoverySearchResult) {
 
 async function loadGoldenSets(): Promise<AdminGoldenSet[]> {
   const filePath = path.join(process.cwd(), GOLDEN_SET_PATH);
-  const content = await readFile(filePath, "utf8");
-  return JSON.parse(content) as AdminGoldenSet[];
+  try {
+    const content = await readFile(filePath, "utf8");
+    return JSON.parse(content) as AdminGoldenSet[];
+  } catch (error) {
+    if (isMissingGoldenSetFile(error)) return [];
+    throw error;
+  }
+}
+
+function isMissingGoldenSetFile(error: unknown) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 function summarizeGoldenSets(goldenSets: AdminGoldenSet[]) {
