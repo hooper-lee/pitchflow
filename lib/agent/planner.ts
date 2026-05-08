@@ -83,13 +83,21 @@ function parseInlineJson(message: string) {
 }
 
 function shouldUpdateProductProfile(message: string) {
+  const productProfileSignals = [
+    "产品",
+    "服务",
+    "我们做",
+    "我司做",
+    "卖给",
+    "核心价值",
+    "核心卖点",
+    "价值主张",
+  ];
+  const updateSignals = ["设置", "补充", "更新", "修改", "填写", "更正", "错了"];
+
   return (
-    (message.includes("设置") ||
-      message.includes("补充") ||
-      message.includes("更新") ||
-      message.includes("修改") ||
-      message.includes("填写")) &&
-    message.includes("产品")
+    updateSignals.some((signal) => message.includes(signal)) &&
+    productProfileSignals.some((signal) => message.includes(signal))
   );
 }
 

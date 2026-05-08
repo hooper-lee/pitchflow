@@ -86,8 +86,8 @@ export const workflowDefinitions: WorkflowDefinition[] = [
     goal: "setup_product_profile",
     title: "产品资料设置",
     toolName: "pitchflow.product_profile.upsert",
-    requiredSlots: ["companyName", "productName", "productDescription", "valueProposition"],
-    optionalSlots: ["senderName", "senderTitle"],
+    requiredSlots: ["productName", "productDescription", "valueProposition"],
+    optionalSlots: ["companyName", "senderName", "senderTitle"],
     startIntents: ["setup_product_profile"],
     buildInput: (slots) => slots,
     buildQuestion: (missingSlots) =>
