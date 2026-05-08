@@ -15,6 +15,9 @@ type AgentStatus = {
   agent: { id: string; name: string; isActive: boolean } | null;
   enabled: boolean;
   canManage: boolean;
+  policy?: {
+    allowedChannels?: string[];
+  };
 };
 
 type SafeChannelConfig = {
@@ -172,6 +175,7 @@ export default function AgentSettingsPage() {
   const canManage = Boolean(agentStatus?.canManage);
   const enabled = Boolean(agentStatus?.enabled);
   const feishuReady = Boolean(feishuConfig?.isEnabled && feishuConfig.appId && feishuConfig.appSecretMasked);
+  const feishuAllowed = Boolean(agentStatus?.policy?.allowedChannels?.includes("feishu"));
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -365,12 +369,17 @@ export default function AgentSettingsPage() {
             <Button
               type="button"
               variant="default"
-              disabled={saving || !enabled || !feishuReady}
+              disabled={saving || !enabled || !feishuReady || !feishuAllowed}
               onClick={() => void createFeishuBindingCode()}
             >
               生成飞书绑定码
             </Button>
           </div>
+          {!feishuAllowed ? (
+            <p className="text-sm text-amber-700">
+              当前套餐不支持飞书私聊入口，需要升级到 Business 或更高套餐后才能生成绑定码。
+            </p>
+          ) : null}
           {!feishuReady ? (
             <p className="text-sm text-muted-foreground">
               需要先保存并启用飞书机器人配置，再生成飞书绑定码。

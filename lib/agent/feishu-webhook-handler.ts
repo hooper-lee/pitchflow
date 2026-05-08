@@ -20,10 +20,19 @@ export async function handleFeishuEventData(
     return;
   }
 
-  const reply = await handleChannelAgentMessage("feishu", channelMessage);
+  const reply = await buildFeishuAgentReply(channelMessage);
   await sendChannelReply("feishu", channelMessage, reply, channelConfig).catch((error) => {
     console.error("Feishu reply failed:", error);
   });
+}
+
+async function buildFeishuAgentReply(channelMessage: ReturnType<typeof readFeishuChannelMessage>) {
+  try {
+    return await handleChannelAgentMessage("feishu", channelMessage);
+  } catch (error) {
+    console.error("Feishu agent handling failed:", error);
+    return error instanceof Error ? error.message : "Agent 暂时不可用，请稍后重试。";
+  }
 }
 
 export async function handleFeishuChannelWebhook(

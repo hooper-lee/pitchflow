@@ -2,7 +2,11 @@ import crypto from "crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { agentChannelBindings, users } from "@/lib/db/schema";
+import { authorizeAgentChannel } from "@/lib/agent/policies/channel-policy";
+import { getAgentPlanPolicy } from "@/lib/agent/policies/plan-policy";
+import { normalizeAgentPlan } from "@/lib/agent/permissions";
 import type { AgentChannel } from "@/lib/agent/types";
+import { getTenant } from "@/lib/services/tenant.service";
 
 type BindingTokenPayload = {
   tenantId: string;
@@ -56,6 +60,7 @@ export async function bindExternalAgentUser(input: {
 }) {
   const payload = parseChannelBindingCode(input.code);
   if (payload.channel !== input.channel) throw new Error("绑定码渠道不匹配。");
+  await assertBindingChannelAllowed(payload.tenantId, input.channel);
 
   const [binding] = await db.insert(agentChannelBindings).values({
     tenantId: payload.tenantId,
@@ -78,6 +83,13 @@ export async function bindExternalAgentUser(input: {
   }).returning();
 
   return binding;
+}
+
+async function assertBindingChannelAllowed(tenantId: string, channel: AgentChannel) {
+  const tenant = await getTenant(tenantId);
+  const policy = getAgentPlanPolicy(normalizeAgentPlan(tenant?.plan));
+  const authorization = authorizeAgentChannel(policy, channel);
+  if (!authorization.allowed) throw new Error(authorization.reason);
 }
 
 export async function findAgentChannelBinding(channel: AgentChannel, externalUserId: string) {
