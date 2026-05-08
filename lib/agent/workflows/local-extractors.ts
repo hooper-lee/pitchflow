@@ -66,14 +66,32 @@ function extractListValue(message: string, labels: string[]) {
   return value ? value.split(/[，,\n、]/).map((item) => item.trim()).filter(Boolean) : undefined;
 }
 
+function extractNaturalProductName(message: string) {
+  return message.match(/(?:我们|我司|公司)?(?:主要)?(?:做|卖|提供)\s*([^，,。；;]+?)(?:，|,|。|；|;|$)/)?.[1]?.trim();
+}
+
+function extractNaturalProductDescription(message: string) {
+  return message.match(/卖给\s*([^，,。；;]+?)(?:，|,|。|；|;|$)/)?.[1]?.trim();
+}
+
+function extractNaturalValueProposition(message: string) {
+  return message.match(/(?:核心价值|核心卖点|价值主张)(?:是|为|：|:)\s*([^。；;\n]+)/)?.[1]?.trim();
+}
+
 function extractProductSlots(message: string) {
   return {
     companyName: extractColonValue(message, ["公司名称", "公司名"]),
-    productName: extractColonValue(message, ["产品/服务名称", "产品服务名称", "产品名称", "产品"]),
+    productName:
+      extractColonValue(message, ["产品/服务名称", "产品服务名称", "产品名称", "产品"]) ||
+      extractNaturalProductName(message),
     senderName: extractColonValue(message, ["发件人姓名", "发件人"]),
     senderTitle: extractColonValue(message, ["发件人职位", "职位"]),
-    productDescription: extractLongColonValue(message, ["产品介绍", "产品描述", "服务介绍", "介绍"]),
-    valueProposition: extractLongColonValue(message, ["核心卖点/价值主张", "核心卖点", "价值主张", "卖点"]),
+    productDescription:
+      extractLongColonValue(message, ["产品介绍", "产品描述", "服务介绍", "介绍"]) ||
+      extractNaturalProductDescription(message),
+    valueProposition:
+      extractLongColonValue(message, ["核心卖点/价值主张", "核心卖点", "价值主张", "卖点"]) ||
+      extractNaturalValueProposition(message),
   };
 }
 

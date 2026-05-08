@@ -7,10 +7,15 @@ import {
   verifyChannelWebhookSignature,
 } from "@/lib/agent/channel-webhook";
 
+const processedFeishuMessageIds = new Map<string, number>();
+const messageDedupeWindowMs = 10 * 60 * 1000;
+
 export async function handleFeishuEventData(
   eventData: Record<string, unknown>,
   channelConfig?: AgentChannelRuntimeConfig | null
 ) {
+  if (isDuplicateFeishuEvent(eventData)) return;
+
   const channelMessage = readFeishuChannelMessage({ event: eventData });
   if (!channelMessage.externalUserId || !channelMessage.text) {
     console.warn("Invalid Feishu event message", {
@@ -24,6 +29,27 @@ export async function handleFeishuEventData(
   await sendChannelReply("feishu", channelMessage, reply, channelConfig).catch((error) => {
     console.error("Feishu reply failed:", error);
   });
+}
+
+function isDuplicateFeishuEvent(eventData: Record<string, unknown>) {
+  const message = (eventData.message || {}) as Record<string, unknown>;
+  const messageId = String(message.message_id || "");
+  if (!messageId) return false;
+
+  cleanupProcessedMessageIds();
+  if (processedFeishuMessageIds.has(messageId)) {
+    console.info("Duplicate Feishu message skipped", { messageId });
+    return true;
+  }
+  processedFeishuMessageIds.set(messageId, Date.now());
+  return false;
+}
+
+function cleanupProcessedMessageIds() {
+  const expiresBefore = Date.now() - messageDedupeWindowMs;
+  for (const [messageId, createdAt] of Array.from(processedFeishuMessageIds.entries())) {
+    if (createdAt < expiresBefore) processedFeishuMessageIds.delete(messageId);
+  }
 }
 
 async function buildFeishuAgentReply(channelMessage: ReturnType<typeof readFeishuChannelMessage>) {
