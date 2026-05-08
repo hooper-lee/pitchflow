@@ -6,16 +6,12 @@ import {
   sendChannelReply,
   verifyChannelWebhookSignature,
 } from "@/lib/agent/channel-webhook";
-
-const processedFeishuMessageIds = new Map<string, number>();
-const messageDedupeWindowMs = 10 * 60 * 1000;
+import { claimChannelEvent } from "@/lib/agent/channel-event-dedupe";
 
 export async function handleFeishuEventData(
   eventData: Record<string, unknown>,
   channelConfig?: AgentChannelRuntimeConfig | null
 ) {
-  if (isDuplicateFeishuEvent(eventData)) return;
-
   const channelMessage = readFeishuChannelMessage({ event: eventData });
   if (!channelMessage.externalUserId || !channelMessage.text) {
     console.warn("Invalid Feishu event message", {
@@ -25,31 +21,28 @@ export async function handleFeishuEventData(
     return;
   }
 
+  const eventId = getFeishuEventId(eventData);
+  const claimed = await claimChannelEvent({
+    channel: "feishu",
+    externalEventId: eventId,
+    externalUserId: channelMessage.externalUserId,
+    externalChatId: channelMessage.externalChatId,
+    metadata: { source: "feishu", eventId },
+  });
+  if (!claimed) {
+    console.info("Duplicate Feishu message skipped", { eventId });
+    return;
+  }
+
   const reply = await buildFeishuAgentReply(channelMessage);
   await sendChannelReply("feishu", channelMessage, reply, channelConfig).catch((error) => {
     console.error("Feishu reply failed:", error);
   });
 }
 
-function isDuplicateFeishuEvent(eventData: Record<string, unknown>) {
+function getFeishuEventId(eventData: Record<string, unknown>) {
   const message = (eventData.message || {}) as Record<string, unknown>;
-  const messageId = String(message.message_id || "");
-  if (!messageId) return false;
-
-  cleanupProcessedMessageIds();
-  if (processedFeishuMessageIds.has(messageId)) {
-    console.info("Duplicate Feishu message skipped", { messageId });
-    return true;
-  }
-  processedFeishuMessageIds.set(messageId, Date.now());
-  return false;
-}
-
-function cleanupProcessedMessageIds() {
-  const expiresBefore = Date.now() - messageDedupeWindowMs;
-  for (const [messageId, createdAt] of Array.from(processedFeishuMessageIds.entries())) {
-    if (createdAt < expiresBefore) processedFeishuMessageIds.delete(messageId);
-  }
+  return String(message.message_id || eventData.event_id || "");
 }
 
 async function buildFeishuAgentReply(channelMessage: ReturnType<typeof readFeishuChannelMessage>) {
