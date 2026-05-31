@@ -13,19 +13,50 @@ const AI_CLASSIFIER_SYSTEM_PROMPT = [
 export async function classifyCandidateWithAI(
   input: DiscoveryAiClassifyInput
 ): Promise<DiscoveryAiClassifyOutput> {
-  const provider = getAIProvider(await getDefaultResearchProvider());
+  const providerName = await getDefaultResearchProvider();
+  const provider = getAIProvider(providerName);
   const prompt = buildClassifierPrompt(input);
-  const rawOutput = await provider.researchProspect({
-    prompt,
-    systemPrompt: AI_CLASSIFIER_SYSTEM_PROMPT,
-    maxTokens: 1800,
-  });
+
+  let rawOutput: string;
+  try {
+    rawOutput = await provider.researchProspect({
+      prompt,
+      systemPrompt: AI_CLASSIFIER_SYSTEM_PROMPT,
+      maxTokens: 1800,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(wrapAiConfigError(message, providerName));
+  }
 
   try {
     return normalizeAiOutput(parseJsonWithRepair<Partial<DiscoveryAiClassifyOutput>>(sanitize(rawOutput)));
   } catch {
     return fallbackAiOutput(rawOutput);
   }
+}
+
+function wrapAiConfigError(message: string, providerName: string): string {
+  const configGuide =
+    providerName === "custom"
+      ? "请到「系统配置 > AI 模型」中检查 API Base URL 和 API Key 是否正确配置"
+      : providerName === "claude"
+        ? "请检查环境变量 ANTHROPIC_API_KEY 是否已设置"
+        : "请检查环境变量 OPENAI_API_KEY 是否已设置";
+
+  if (
+    message.includes("not configured") ||
+    message.includes("not found") ||
+    message.includes("401") ||
+    message.includes("403") ||
+    message.includes("401 Unauthorized") ||
+    message.includes("Incorrect API key") ||
+    message.includes("Invalid API key")
+  ) {
+    return `AI 模型未正确配置（${providerName}）：${message}。${configGuide}`;
+  }
+
+  return `AI 模型调用失败：${message}`;
 }
 
 function buildClassifierPrompt(input: DiscoveryAiClassifyInput) {

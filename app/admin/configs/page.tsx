@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, RotateCcw, Sparkles } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, RotateCcw, Sparkles, XCircle } from "lucide-react";
 
 interface ConfigField {
   key: string;
@@ -290,6 +290,8 @@ export default function AdminConfigsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  const [testingModel, setTestingModel] = useState(false);
+  const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string; latency?: number } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -364,6 +366,42 @@ export default function AdminConfigsPage() {
     }
   };
 
+  const handleTestModel = async () => {
+    setTestingModel(true);
+    setModelTestResult(null);
+    try {
+      const baseURL = configs["CUSTOM_AI_BASE_URL"] || "";
+      const apiKey = configs["CUSTOM_AI_API_KEY"] || "";
+      const model = configs["CUSTOM_AI_MODEL"] || "";
+
+      const res = await fetch("/api/admin/configs/test-model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseURL, apiKey, model }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.data?.success) {
+        setModelTestResult({
+          success: true,
+          message: `连接成功（${data.data.latency}ms）`,
+          latency: data.data.latency,
+        });
+        toast({ title: `✅ 模型连接成功（${data.data.latency}ms）` });
+      } else {
+        const errMsg = data.error || data.message || "连接失败，请检查配置";
+        setModelTestResult({ success: false, message: errMsg });
+        toast({ title: `❌ ${errMsg}`, variant: "destructive" });
+      }
+    } catch {
+      const errMsg = "网络错误，无法测试模型连接";
+      setModelTestResult({ success: false, message: errMsg });
+      toast({ title: `❌ ${errMsg}`, variant: "destructive" });
+    } finally {
+      setTestingModel(false);
+    }
+  };
+
   const scoringWeightTotal = SCORING_WEIGHT_SECTION.fields.reduce(
     (sum, field) => sum + Number(getValue(field.key) || 0),
     0
@@ -425,8 +463,41 @@ export default function AdminConfigsPage() {
           {CONFIG_SECTIONS.map((section) => (
         <Card key={section.title} className="section-card">
           <CardHeader>
-            <CardTitle>{section.title}</CardTitle>
-            <CardDescription>{section.description}</CardDescription>
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle>{section.title}</CardTitle>
+                <CardDescription>{section.description}</CardDescription>
+              </div>
+              {section.title === "AI 模型" && (
+                <div className="flex flex-col items-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestModel}
+                    disabled={testingModel}
+                  >
+                    {testingModel ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        测试中...
+                      </>
+                    ) : (
+                      "测试连接"
+                    )}
+                  </Button>
+                  {modelTestResult && (
+                    <div className={`flex items-center gap-1.5 text-xs ${modelTestResult.success ? "text-emerald-600" : "text-red-500"}`}>
+                      {modelTestResult.success ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5" />
+                      )}
+                      <span>{modelTestResult.message}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {section.fields.map((field) => (

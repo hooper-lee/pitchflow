@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, SearchCheck } from "lucide-react";
+import { ArrowLeft, RefreshCw, SearchCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 interface DiscoveryJob {
   id: string;
@@ -32,6 +33,7 @@ const statusLabelMap: Record<string, string> = {
 };
 
 export default function DiscoveryJobsPage() {
+  const { toast } = useToast();
   const [jobs, setJobs] = useState<DiscoveryJob[]>([]);
 
   async function loadJobs() {
@@ -43,6 +45,25 @@ export default function DiscoveryJobsPage() {
   useEffect(() => {
     void loadJobs();
   }, []);
+
+  async function retryJob(jobId: string, event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      const res = await fetch(`/api/v1/discovery-jobs/${jobId}/retry`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        toast({ title: "任务已重新加入队列" });
+        await loadJobs();
+      } else {
+        const data = await res.json();
+        toast({ title: data.error || "重试失败", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "重试失败，请检查网络", variant: "destructive" });
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -83,19 +104,31 @@ export default function DiscoveryJobsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-sm md:min-w-[320px]">
-                  <div className="rounded-xl border border-slate-200/80 p-3">
-                    <div className="text-xs text-muted-foreground">接受</div>
-                    <div className="mt-1 font-medium">{job.acceptedCount}</div>
+                <div className="flex items-center gap-3">
+                  <div className="grid grid-cols-3 gap-3 text-sm md:min-w-[320px]">
+                    <div className="rounded-xl border border-slate-200/80 p-3">
+                      <div className="text-xs text-muted-foreground">接受</div>
+                      <div className="mt-1 font-medium">{job.acceptedCount}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200/80 p-3">
+                      <div className="text-xs text-muted-foreground">拒绝</div>
+                      <div className="mt-1 font-medium">{job.rejectedCount}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200/80 p-3">
+                      <div className="text-xs text-muted-foreground">入库</div>
+                      <div className="mt-1 font-medium">{job.savedCount}</div>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 p-3">
-                    <div className="text-xs text-muted-foreground">拒绝</div>
-                    <div className="mt-1 font-medium">{job.rejectedCount}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200/80 p-3">
-                    <div className="text-xs text-muted-foreground">入库</div>
-                    <div className="mt-1 font-medium">{job.savedCount}</div>
-                  </div>
+                  {job.status === "failed" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => retryJob(job.id, e)}
+                    >
+                      <RefreshCw className="mr-1.5 h-4 w-4" />
+                      重试
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -33,6 +33,7 @@ interface DiscoveryJob {
   savedCount: number;
   acceptedCount: number;
   rejectedCount: number;
+  errorMessage: string | null;
   summary: DiscoveryJobSummary;
 }
 
@@ -129,6 +130,23 @@ export default function DiscoveryJobDetailPage({ params }: JobPageProps) {
     await load();
   }
 
+  async function retryJob() {
+    try {
+      const res = await fetch(`/api/v1/discovery-jobs/${params.id}/retry`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        toast({ title: "任务已重新加入队列" });
+        await load();
+      } else {
+        const data = await res.json();
+        toast({ title: data.error || "重试失败", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "重试失败，请检查网络", variant: "destructive" });
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -159,6 +177,12 @@ export default function DiscoveryJobDetailPage({ params }: JobPageProps) {
               取消任务
             </Button>
           )}
+          {job?.status === "failed" && (
+            <Button variant="outline" onClick={() => void retryJob()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              重试任务
+            </Button>
+          )}
         </div>
       </div>
 
@@ -172,6 +196,23 @@ export default function DiscoveryJobDetailPage({ params }: JobPageProps) {
           </Card>
         ))}
       </div>
+
+      {job?.status === "failed" && job?.errorMessage && (
+        <Card className="rounded-[24px] border-red-200/80 bg-red-50/50">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <Ban className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div>
+                <p className="font-semibold text-red-700">任务失败原因</p>
+                <p className="mt-1 text-sm text-red-600 whitespace-pre-wrap">{job.errorMessage}</p>
+                <p className="mt-2 text-xs text-red-400">
+                  请检查配置后点击"重试任务"重新执行
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="rounded-[24px] border-slate-200/80">
         <CardHeader>

@@ -10,6 +10,7 @@ import {
 import { detectOfficialWebsite, extractContacts } from "@/lib/detector";
 import { getDetectorConfig } from "@/lib/detector/config";
 import { fetchPage } from "@/lib/detector/fetcher";
+import { getConfig } from "@/lib/services/config.service";
 import { classifyCandidateWithAI } from "./ai-classifier";
 import { getDiscoveryHistorySignals, getFeedbackScore } from "./blocklist";
 import { normalizeDomain, normalizeUrl, getRootDomain } from "./normalize";
@@ -39,10 +40,46 @@ interface WorkingCandidate {
   aiResult: DiscoveryAiClassifyOutput | null;
 }
 
+/**
+ * 检查 AI 模型是否已配置，若未配置则直接报错，避免任务到评分阶段才失败
+ */
+async function ensureAiModelConfigured() {
+  const [baseUrl, apiKey] = await Promise.all([
+    getConfig("CUSTOM_AI_BASE_URL"),
+    getConfig("CUSTOM_AI_API_KEY"),
+  ]);
+
+  // 如果自定义 AI 已配置，直接通过
+  if (baseUrl && apiKey) return;
+
+  // 否则检查环境变量
+  if (process.env.ANTHROPIC_API_KEY) return;
+  if (process.env.OPENAI_API_KEY) return;
+
+  // 如果自定义 AI 只配了一半，给出明确提示
+  if (baseUrl && !apiKey) {
+    throw new Error(
+      "AI 模型未配置完成：已设置 API Base URL 但缺少 API Key。请到「系统配置 > AI 模型」中完善配置后重试。"
+    );
+  }
+  if (!baseUrl && apiKey) {
+    throw new Error(
+      "AI 模型未配置完成：已设置 API Key 但缺少 API Base URL。请到「系统配置 > AI 模型」中完善配置后重试。"
+    );
+  }
+
+  throw new Error(
+    "AI 模型未配置：请先到「系统配置 > AI 模型」中配置 API Base URL 和 API Key，或设置 ANTHROPIC_API_KEY / OPENAI_API_KEY 环境变量。"
+  );
+}
+
 export async function runDiscoveryPipeline(jobId: string) {
   const context = await loadContext(jobId);
   await markJobStarted(context.job.id);
   await ensureJobActive(context.job.id);
+
+  // 提前检查 AI 模型是否已配置，避免执行到评分阶段才失败
+  await ensureAiModelConfigured();
 
   const queries = buildDiscoveryQueries(context.job, context.icpProfile || emptyProfile(context.job));
   const detectedCandidates = await collectDetectedCandidates(context, queries);
