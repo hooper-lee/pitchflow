@@ -206,7 +206,7 @@ export default function DiscoveryJobDetailPage({ params }: JobPageProps) {
                 <p className="font-semibold text-red-700">任务失败原因</p>
                 <p className="mt-1 text-sm text-red-600 whitespace-pre-wrap">{job.errorMessage}</p>
                 <p className="mt-2 text-xs text-red-400">
-                  请检查配置后点击"重试任务"重新执行
+                  请检查配置后点击&ldquo;重试任务&rdquo;重新执行
                 </p>
               </div>
             </div>
