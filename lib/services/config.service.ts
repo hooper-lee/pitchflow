@@ -617,13 +617,12 @@ function getPromptDescription(key: string): string {
 
 /**
  * 初始化默认 AI Prompt 配置
+ * 注意：每次启动都会用代码中的 DEFAULT_PROMPTS 覆盖 DB 中的值，
+ * 确保所有环境（新部署/重置）都使用最新的默认提示词。
  */
 export async function initDefaultAiPrompts(): Promise<void> {
   for (const [key, value] of Object.entries(DEFAULT_PROMPTS)) {
-    const existing = await getConfig(key);
-    if (!existing) {
-      await setConfig(key, value, getPromptDescription(key));
-    }
+    await setConfig(key, value, getPromptDescription(key));
   }
 
   for (const [key, value] of Object.entries(DEFAULT_SCORING_WEIGHTS)) {
