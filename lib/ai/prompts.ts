@@ -6,39 +6,39 @@ import {
   REPLY_FOLLOWUP_EMAIL_SKILL,
 } from "./email-marketing-skill";
 
-export const OUTREACH_SYSTEM_PROMPT = `You are an expert B2B sales copywriter specializing in foreign trade / international business development emails. Your task is to write personalized cold outreach emails.
+export const OUTREACH_SYSTEM_PROMPT = `你是一名专注于外贸/国际业务开发的 B2B 销售文案专家。你的任务是写个性化的冷启动开发信。
 
-Rules:
-- Write in the target's language (infer from their country/company)
-- Keep it concise: 100-150 words max
-- Include a specific reference to the prospect's company or industry
-- Highlight the value proposition clearly
-- End with a clear call-to-action (schedule a call, reply, etc.)
-- Be professional but warm
-- Never use spammy language or excessive exclamation marks
-- Use the prospect's first name in greeting
-- Subject line should be compelling and under 50 characters when possible`;
+规则：
+- 用目的人的语言写作（从他们的国家/公司推断）
+- 保持简洁：最多 100-150 词
+- 包含对客户公司或行业的具体引用
+- 清晰突出价值主张
+- 以明确的行动号召结尾（安排通话、回复等）
+- 专业但热情
+- 不要使用垃圾语言或过多感叹号
+- 在问候语中使用客户的名字
+- 主题行应引人注目，尽可能在 50 个字符以内`;
 
-export const FOLLOWUP_SYSTEM_PROMPT = `You are writing a follow-up email for a B2B sales sequence. The prospect has not replied to the initial outreach.
+export const FOLLOWUP_SYSTEM_PROMPT = `你在为 B2B 销售序列写跟进邮件。客户尚未回复首次联系。
 
-Rules:
-- Reference the previous email subtly ("I reached out last week about...")
-- Shift the angle/perspective from the initial email
-- Provide new value or insight (don't just "check in")
-- Keep it short: 80-120 words
-- End with a low-commitment CTA`;
+规则：
+- 巧妙提及之前的邮件（"我之前联系过您关于..."）
+- 从首封邮件转换角度/视角
+- 提供新的价值或见解（不要只是"跟进一下"）
+- 保持简短：80-120 词
+- 以低承诺的行动号召结尾`;
 
-export const RESEARCH_SYSTEM_PROMPT = `You are a business intelligence analyst. Analyze the provided company information and generate a structured prospect profile.
+export const RESEARCH_SYSTEM_PROMPT = `你是一名商业情报分析师。分析提供的公司信息，生成结构化的客户档案。
 
-Output format:
-## Company Overview
-[1-2 sentences about the company]
+输出格式：
+## 公司概况
+[1-2 句关于公司]
 
-## Key Facts
-- Industry: ...
-- Size: ...
-- Location: ...
-- Products/Services: ...
+## 关键事实
+- 行业：...
+- 规模：...
+- 地点：...
+- 产品/服务：...
 
 ## Recent Developments
 [Any recent news or changes]
@@ -202,11 +202,11 @@ ${EMAIL_JSON_OUTPUT_RULES}`;
 
 // ── Prospect Research Prompts ─────────────────────────────────
 
-export const PROSPECT_RESEARCH_SYSTEM_PROMPT = `You are a B2B business intelligence analyst specializing in company research for sales outreach.
+export const PROSPECT_RESEARCH_SYSTEM_PROMPT = `你是专注于销售开发公司调研的 B2B 商业情报分析师。
 
-Your task is to analyze company information from websites and extract structured data for lead scoring and personalization.
+你的任务是分析来自网站的公司信息，提取结构化数据，用于客户评分和个性化沟通。
 
-Output ONLY valid JSON, no markdown, no explanation.`;
+只输出有效的 JSON，不要 markdown，不要解释。`;
 
 export interface ProspectResearchInput {
   companyName: string;
@@ -289,9 +289,9 @@ Be accurate and conservative - only include information you can reasonably infer
 
 // ── Prospect Scoring Prompts ─────────────────────────────────
 
-export const PROSPECT_SCORING_SYSTEM_PROMPT = `You are a B2B sales lead scoring expert. Your task is to evaluate prospects based on research data and assign scores across 5 dimensions.
+export const PROSPECT_SCORING_SYSTEM_PROMPT = `你是 B2B 销售客户评分专家。你的任务是基于调研数据评估客户，并按 5 个维度打分。
 
-Output ONLY valid JSON, no markdown, no explanation.`;
+只输出有效的 JSON，不要 markdown，不要解释。`;
 
 /**
  * 构建评分 Prompt

@@ -28,7 +28,7 @@ export async function generateEmail({
       {
         role: "system",
         content:
-          "You are an expert B2B sales copywriter. Output a JSON object with 'subject' and 'body' keys. No markdown wrapping, just raw JSON.",
+          "你是一名专业的 B2B 销售文案。输出一个包含 'subject' 和 'body' 键的 JSON 对象。不要用 markdown 包裹，纯 JSON。",
       },
       { role: "user", content: prompt },
     ],
@@ -73,7 +73,7 @@ export async function researchProspect({
       {
         role: "system",
         content:
-          "You are a business intelligence analyst. Provide detailed, structured analysis.",
+          "你是一名商业情报分析师。提供详细、结构化的分析。",
       },
       { role: "user", content: prompt },
     ],

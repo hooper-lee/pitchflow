@@ -46,6 +46,8 @@ const AI_PROMPT_KEYS = {
   AGENT_PLANNER_USER: "AI_PROMPT_AGENT_PLANNER_USER",
   AGENT_RESULT_SUMMARY_SYSTEM: "AI_PROMPT_AGENT_RESULT_SUMMARY_SYSTEM",
   AGENT_RESULT_SUMMARY_USER: "AI_PROMPT_AGENT_RESULT_SUMMARY_USER",
+  DISCOVERY_CLASSIFIER_SYSTEM: "AI_PROMPT_DISCOVERY_CLASSIFIER_SYSTEM",
+  DISCOVERY_CLASSIFIER_USER: "AI_PROMPT_DISCOVERY_CLASSIFIER_USER",
 };
 
 const SCORING_WEIGHT_KEYS = {
@@ -178,6 +180,29 @@ const AI_PROMPT_SECTION: ConfigSection = {
       placeholder: "Evaluate this prospect and score them...",
       textarea: true,
       rows: 10,
+    },
+  ],
+};
+
+const DISCOVERY_CLASSIFIER_SECTION: ConfigSection = {
+  title: "批量挖掘 AI 分类提示词",
+  description: "配置批量挖掘时 AI 判断候选客户是否匹配 ICP 的提示词",
+  fields: [
+    {
+      key: AI_PROMPT_KEYS.DISCOVERY_CLASSIFIER_SYSTEM,
+      label: "分类系统提示词",
+      secret: false,
+      placeholder: "你是外贸获客 ICP 评估器...",
+      textarea: true,
+      rows: 6,
+    },
+    {
+      key: AI_PROMPT_KEYS.DISCOVERY_CLASSIFIER_USER,
+      label: "分类用户提示词模板",
+      secret: false,
+      placeholder: "评估场景：{description}...",
+      textarea: true,
+      rows: 20,
     },
   ],
 };
@@ -325,6 +350,7 @@ export default function AdminConfigsPage() {
       const sectionsToSave = [
         ...CONFIG_SECTIONS,
         AI_PROMPT_SECTION,
+        DISCOVERY_CLASSIFIER_SECTION,
         EMAIL_PROMPT_SECTION,
         AGENT_PROMPT_SECTION,
         SCORING_WEIGHT_SECTION,
@@ -593,6 +619,30 @@ export default function AdminConfigsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {AI_PROMPT_SECTION.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Textarea
+                    id={field.key}
+                    placeholder={field.placeholder}
+                    value={getValue(field.key)}
+                    rows={field.rows || 4}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                    className="font-mono text-sm"
+                  />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="section-card">
+            <CardHeader>
+              <CardTitle>{DISCOVERY_CLASSIFIER_SECTION.title}</CardTitle>
+              <CardDescription>{DISCOVERY_CLASSIFIER_SECTION.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {DISCOVERY_CLASSIFIER_SECTION.fields.map((field) => (
                 <div key={field.key} className="space-y-2">
                   <Label htmlFor={field.key}>{field.label}</Label>
                   <Textarea

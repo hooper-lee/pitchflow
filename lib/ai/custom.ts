@@ -48,7 +48,7 @@ export interface GeneratedEmail {
 }
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are an expert B2B sales copywriter. You MUST respond with ONLY a raw JSON object with two keys: 'subject' (string, email subject line) and 'body' (string, email body text). Do NOT include any explanation, reasoning, or thinking. Do NOT wrap in markdown code blocks. Just output the JSON directly.";
+  "你是一名专业的 B2B 销售文案。你必须只输出一个原始的 JSON 对象，包含 'subject'（字符串，邮件主题行）和 'body'（字符串，邮件正文）两个键。不要包含任何解释、推理或思考。不要用 markdown 代码块包裹。直接输出 JSON。";
 
 export async function generateEmail({
   prompt,
@@ -109,7 +109,7 @@ export async function researchProspect({
         role: "system",
         content:
           systemPrompt ||
-          "You are a business intelligence analyst. Provide detailed, structured analysis.",
+          "你是一名商业情报分析师。提供详细、结构化的分析。",
       },
       { role: "user", content: prompt },
     ],

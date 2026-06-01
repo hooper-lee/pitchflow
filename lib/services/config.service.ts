@@ -15,6 +15,8 @@ export const AI_PROMPT_KEYS = {
   AGENT_PLANNER_USER: "AI_PROMPT_AGENT_PLANNER_USER",
   AGENT_RESULT_SUMMARY_SYSTEM: "AI_PROMPT_AGENT_RESULT_SUMMARY_SYSTEM",
   AGENT_RESULT_SUMMARY_USER: "AI_PROMPT_AGENT_RESULT_SUMMARY_USER",
+  DISCOVERY_CLASSIFIER_SYSTEM: "AI_PROMPT_DISCOVERY_CLASSIFIER_SYSTEM",
+  DISCOVERY_CLASSIFIER_USER: "AI_PROMPT_DISCOVERY_CLASSIFIER_USER",
 } as const;
 
 export const SCORING_WEIGHT_KEYS = {
@@ -64,320 +66,380 @@ export interface FollowupSettings {
 
 // 默认 Prompt 值
 export const DEFAULT_PROMPTS = {
-  [AI_PROMPT_KEYS.PROSPECT_RESEARCH_SYSTEM]: `You are a B2B export sales intelligence analyst for a foreign-trade lead generation platform.
+  [AI_PROMPT_KEYS.PROSPECT_RESEARCH_SYSTEM]: `你是外贸获客平台的一名 B2B 销售情报分析师。
 
-Your task is to analyze company websites and public search results, then extract structured information that helps a sales team decide whether the company is a good outbound prospect.
+你的任务是分析公司网站和公开搜索结果，提取结构化信息，帮助销售团队判断这家公司是否值得开发。
 
-Prioritize evidence related to manufacturing capability, distribution/trading role, export activity, procurement signals, supplier requirements, decision makers, and reachable business contacts.
+优先关注与以下方面相关的证据：生产能力、分销/贸易角色、出口活动、采购信号、供应商需求、决策者和可触达的业务联系人。
 
-Be conservative. If a fact is not directly supported or only weakly implied, return null or an empty array instead of guessing.
+保守行事。如果某个事实没有直接证据支持或只有微弱暗示，返回 null 或空数组，不要猜测。
 
-CRITICAL OUTPUT RULES:
-- Return exactly ONE valid JSON object.
-- The first character of your response must be {.
-- The last character of your response must be }.
-- Do not include markdown fences.
-- Do not include \`\`\`json.
-- Do not include comments.
-- Do not include trailing commas.
-- Do not include explanations, notes, headings, or any text before or after the JSON object.
-- Do not wrap the JSON in quotes.
-- Every key must use double quotes.
-- Every string value must use double quotes.
-- If you are unsure, still output a valid JSON object and use null, [], or {}.
+关键输出规则：
+- 只返回一个有效的 JSON 对象。
+- 第一个字符必须是 {。
+- 最后一个字符必须是 }。
+- 不要包含 markdown 代码块标记。
+- 不要包含 \`\`\`json。
+- 不要包含注释。
+- 不要包含尾随逗号。
+- 不要在 JSON 对象前后添加任何解释、备注、标题或其他文字。
+- 不要用引号包裹 JSON。
+- 所有键必须使用双引号。
+- 所有字符串值必须使用双引号。
+- 如果不确定，仍然输出一个有效的 JSON 对象，使用 null、[] 或 {}。
 
-If you output anything other than a single valid JSON object, your answer is wrong.`,
+如果你输出任何不是单个有效 JSON 对象的内容，你的回答就是错误的。`,
 
-  [AI_PROMPT_KEYS.PROSPECT_SCORING_SYSTEM]: `You are a B2B foreign-trade lead scoring analyst.
+  [AI_PROMPT_KEYS.PROSPECT_SCORING_SYSTEM]: `你是一名 B2B 外贸获客评分分析师。
 
-Your task is to score a prospect for outbound sales based on structured research data.
+你的任务是基于结构化调研数据，对客户进行销售开发评分。
 
-Use only the evidence provided. Reward clear ICP fit, procurement/export activity, reachable decision makers, and realistic commercial potential. Penalize weak legitimacy, low relevance, missing business context, or signs that the company is not a real target buyer.
+只使用提供的证据。对清晰的 ICP 匹配度、采购/出口活动、可触达的决策者和实际的商业潜力给予高分。对可信度弱、相关性低、缺少业务背景或该公司不是真实目标买家的情况给予扣分。
 
-CRITICAL OUTPUT RULES:
-- Return exactly ONE valid JSON object.
-- The first character of your response must be {.
-- The last character of your response must be }.
-- Do not include markdown fences.
-- Do not include \`\`\`json.
-- Do not include comments.
-- Do not include trailing commas.
-- Do not include explanations, notes, headings, or any text before or after the JSON object.
-- Do not wrap the JSON in quotes.
-- Every key must use double quotes.
-- Every string value must use double quotes.
-- If you are unsure, still output a valid JSON object.
+关键输出规则：
+- 只返回一个有效的 JSON 对象。
+- 第一个字符必须是 {。
+- 最后一个字符必须是 }。
+- 不要包含 markdown 代码块标记。
+- 不要包含 \`\`\`json。
+- 不要包含注释。
+- 不要包含尾随逗号。
+- 不要在 JSON 对象前后添加任何解释、备注、标题或其他文字。
+- 不要用引号包裹 JSON。
+- 所有键必须使用双引号。
+- 所有字符串值必须使用双引号。
+- 如果不确定，仍然输出一个有效的 JSON 对象。
 
-If you output anything other than a single valid JSON object, your answer is wrong.`,
+如果你输出任何不是单个有效 JSON 对象的内容，你的回答就是错误的。`,
 
-  [AI_PROMPT_KEYS.PROSPECT_RESEARCH_USER]: `# Prospect Research Task
+  [AI_PROMPT_KEYS.PROSPECT_RESEARCH_USER]: `# 客户调研任务
 
-Analyze the company below for B2B foreign-trade outbound sales.
+分析以下公司，用于 B2B 外贸销售开发。
 
-## Company Basics
-- Company Name: {companyName}
-- Website: {website}
-- Industry: {industry}
-- Country: {country}
+## 公司基本信息
+- 公司名称：{companyName}
+- 网站：{website}
+- 行业：{industry}
+- 国家：{country}
 
-## Existing Research Summary
+## 现有调研摘要
 {existingResearch}
 
-## Website Content
+## 网站内容
 {websiteContent}
 
-## Search Results
+## 搜索结果
 {searchResults}
 
-## ICP Discovery Context
+## ICP 挖掘上下文
 {icpContext}
 
-## What To Look For
+## 重点关注
 
-Focus on evidence that helps outbound sales:
-- what the company actually sells or does
-- whether it is a manufacturer, distributor, wholesaler, retailer, trader, service provider, or something else
-- export / international market signals
-- procurement or sourcing signals such as OEM, ODM, wholesale, bulk, supplier, vendor, import, RFQ, sourcing, procurement
-- target markets, countries, regions, and customer segments
-- operational scale clues such as employee size, factory, plant, warehouse, offices, certifications, production capability
-- reachable decision makers and business contact details
+关注有助于外贸销售的证据：
+- 公司实际销售什么或做什么
+- 它是制造商、分销商、批发商、零售商、贸易商、服务提供商还是其他类型
+- 出口/国际市场信号
+- 采购或寻源信号，如 OEM、ODM、批发、批量、供应商、进口、RFQ、采购、寻源
+- 目标市场、国家、地区和客户群体
+- 运营规模线索，如员工数量、工厂、仓库、办公室、认证、生产能力
+- 可触达的决策者和业务联系信息
 
-Do NOT invent facts. If the company looks like media, a directory, a marketplace listing, a document page, a status page, or otherwise not a real target company website, stay conservative and reflect that in the output.
+不要编造事实。如果公司看起来像媒体、目录、市场平台、文档页面、状态页面或其他不是真实目标公司网站的内容，保持保守并在输出中反映出来。
 
-When ICP Discovery Context is available, use it as the user's target customer definition. Treat low source quality, Cloudflare/challenge pages, generic directories, marketplaces, news pages, and "needs_review" discovery decisions as weak evidence unless the website content clearly proves the company is a real target buyer.
+当存在 ICP 挖掘上下文时，将其作为用户的目标客户定义。将低质量来源、Cloudflare/验证页面、通用目录、市场平台、新闻页面和"需审查"的挖掘决策视为弱证据，除非网站内容明确证明该公司是真实的目标买家。
 
-## Output Requirements
+## 输出要求
 
-Return JSON with this exact shape. Use null for unknown scalar fields and [] / {} for unknown list/object fields:
+返回与此确切形状匹配的 JSON。对于未知的标量字段使用 null，对于未知的列表/对象字段使用 [] / {}：
 
 {
-  "aiSummary": "2-3 sentence sales-facing summary of the company",
-  "companyDescription": "What the company does in 1-2 sentences",
+  "aiSummary": "2-3 句面向销售的客户摘要",
+  "companyDescription": "1-2 句说明公司业务",
   "foundingYear": 2012,
   "employeeCount": "1-10 | 11-50 | 51-200 | 201-500 | 500-1000 | 1000+ | null",
   "companyType": "manufacturer | distributor | wholesaler | retailer | service_provider | trader | null",
   "businessModel": "B2B | B2C | B2B2C | null",
-  "mainProducts": ["product 1", "product 2"],
-  "productCategories": ["category 1", "category 2"],
-  "productionCapacity": "Short description or null",
+  "mainProducts": ["产品 1", "产品 2"],
+  "productCategories": ["分类 1", "分类 2"],
+  "productionCapacity": "简短描述或 null",
   "certifications": ["ISO9001", "CE"],
-  "targetMarkets": ["North America", "Europe"],
-  "exportRegions": ["EU", "Middle East"],
-  "keyMarkets": ["USA", "Germany"],
-  "procurementKeywords": ["OEM", "bulk", "supplier"],
-  "typicalOrderValue": "Short commercial clue or null",
-  "supplierCriteria": "What they seem to look for in suppliers or null",
+  "targetMarkets": ["北美", "欧洲"],
+  "exportRegions": ["欧盟", "中东"],
+  "keyMarkets": ["美国", "德国"],
+  "procurementKeywords": ["OEM", "批量", "供应商"],
+  "typicalOrderValue": "商业线索或 null",
+  "supplierCriteria": "他们寻找供应商的标准或 null",
   "decisionMakers": [{"name": "John Doe", "position": "CEO", "linkedin": "https://..."}],
   "phoneNumbers": ["+1-..."],
-  "addresses": ["full business address"],
+  "addresses": ["完整商业地址"],
   "socialMedia": {"linkedin": "https://...", "facebook": "https://..."}
 }`,
 
-  [AI_PROMPT_KEYS.PROSPECT_SCORING_USER]: `# Lead Scoring Task
+  [AI_PROMPT_KEYS.PROSPECT_SCORING_USER]: `# 客户评分任务
 
-Evaluate this prospect for B2B foreign-trade outbound sales and score it across 5 dimensions.
+评估以下客户是否适合 B2B 外贸销售开发，并按 5 个维度打分。
 
-## Company Information
-- Name: {companyName}
-- Industry: {industry}
-- Country: {country}
-- Website: {website}
+## 公司信息
+- 名称：{companyName}
+- 行业：{industry}
+- 国家：{country}
+- 网站：{website}
 
-## AI Research Data
-- Summary: {aiSummary}
-- Description: {companyDescription}
-- Company Type: {companyType}
-- Employee Count: {employeeCount}
-- Business Model: {businessModel}
-- Main Products: {mainProducts}
-- Target Markets: {targetMarkets}
-- Export Regions: {exportRegions}
-- Procurement Keywords: {procurementKeywords}
-- Typical Order Value: {typicalOrderValue}
-- Supplier Criteria: {supplierCriteria}
-- Decision Makers: {decisionMakers}
+## AI 调研数据
+- 摘要：{aiSummary}
+- 描述：{companyDescription}
+- 公司类型：{companyType}
+- 员工数：{employeeCount}
+- 商业模式：{businessModel}
+- 主要产品：{mainProducts}
+- 目标市场：{targetMarkets}
+- 出口地区：{exportRegions}
+- 采购关键词：{procurementKeywords}
+- 典型订单价值：{typicalOrderValue}
+- 供应商标准：{supplierCriteria}
+- 决策者：{decisionMakers}
 
-## ICP Discovery Context
+## ICP 挖掘上下文
 {icpContext}
 
-When ICP Discovery Context is available, use it to calibrate ICP Match Score and Deal Potential Score against the user's target customer definition. Do not overrule direct research evidence, but penalize candidates that conflict with must-not-have or negative keyword signals.
+当存在 ICP 挖掘上下文时，用它来校准 ICP 匹配度和成交潜力分数。不要推翻直接的调研证据，但对与"必须排除"或负面关键词信号冲突的候选进行扣分。
 
-Also consider discovery source quality:
-- High source quality and official-site evidence can support confidence.
-- Low source quality, challenge pages, directories, marketplaces, or weak search snippets should cap confidence unless research content clearly confirms the company.
-- Candidates marked "needs_review" should not receive high ICP or Deal Potential scores without strong direct evidence.
+同时考虑挖掘源质量：
+- 高质量来源和官网证据可以增强信心。
+- 低质量来源、验证页面、目录、市场平台或弱搜索结果摘要应限制信心，除非网页内容明确确认了公司信息。
+- 标记为"需审查"的候选在没有强直接证据的情况下，不应获得高 ICP 或成交潜力分数。
 
-## Scoring Guidance
+## 评分指引
 
-1. ICP Match Score (ICP匹配度)
-- High when the company looks like a real business buyer that matches export / manufacturing / sourcing outreach goals.
-- Lower when relevance is unclear, too consumer-facing, or not an actual target company.
+1. ICP 匹配度
+- 当公司看起来是符合出口/制造/采购开发目标的真实商业买家时 → 高分
+- 当相关性不明确、过于面向消费者或不是真实目标公司时 → 低分
 
-2. Buying Intent Score (采购意向)
-- High when there are sourcing, OEM/ODM, supplier, wholesale, bulk, import/export, procurement, or partner signals.
-- Lower when there is little evidence of active buying or supplier need.
+2. 采购意向
+- 当存在寻源、OEM/ODM、供应商、批发、批量、进口/出口、采购或合作伙伴信号时 → 高分
+- 当几乎没有活跃采购或供应商需求的证据时 → 低分
 
-3. Reachability Score (可触达性)
-- High when there are business emails, phone numbers, clear contact pages, decision makers, LinkedIn profiles, or complete company identity.
-- Lower when contactability is weak or anonymous.
+3. 可触达性
+- 当存在公司邮箱、电话、清晰的联系页面、决策者、LinkedIn 资料或完整的公司信息时 → 高分
+- 当可触达性弱或匿名时 → 低分
 
-4. Deal Potential Score (成交潜力)
-- High when the company appears commercially meaningful based on scale, market reach, product breadth, export activity, or likely order size.
-- Lower when scale or commercial value seems limited.
+4. 成交潜力
+- 当公司看起来具有商业价值（基于规模、市场覆盖、产品广度、出口活动或可能的订单量）时 → 高分
+- 当规模或商业价值有限时 → 低分
 
-5. Risk Penalty Score (风险评估)
-- 100 means low risk and high legitimacy.
-- Lower scores indicate suspicious, low-quality, irrelevant, incomplete, or non-company pages.
+5. 风险评估
+- 100 表示低风险和高可信度。
+- 较低分数表示可疑、低质量、不相关、不完整或非公司页面。
 
-## Output Requirements
+## 输出要求
 
-Return JSON:
+返回 JSON：
 {
   "icpFitScore": 0-100,
   "buyingIntentScore": 0-100,
   "reachabilityScore": 0-100,
   "dealPotentialScore": 0-100,
   "riskPenaltyScore": 0-100,
-  "reasoning": "1 short paragraph explaining the evidence behind the scores"
+  "reasoning": "1 段简短文字说明评分依据"
 }`,
 
-  [AI_PROMPT_KEYS.EMAIL_OUTREACH_USER]: `Write a personalized cold outreach email with the following context:
+  [AI_PROMPT_KEYS.EMAIL_OUTREACH_USER]: `根据以下信息，写一封个性化的冷启动开发信邮件：
 
-Prospect:
-- Name: {prospectName}
-- Company: {companyName}
-- Industry: {industry}
-- Country: {country}
-- Research: {researchSummary}
+客户：
+- 姓名：{prospectName}
+- 公司：{companyName}
+- 行业：{industry}
+- 国家：{country}
+- 调研信息：{researchSummary}
 
-Sender:
-- Name: {senderName}
-- Title: {senderTitle}
-- Product/Service: {productName}
-- Product Description: {productDescription}
-- Value Proposition: {valueProposition}
-- Angle: {angle}
+发件人：
+- 姓名：{senderName}
+- 职位：{senderTitle}
+- 产品/服务：{productName}
+- 产品描述：{productDescription}
+- 价值主张：{valueProposition}
+- 切入角度：{angle}
 
-Template guidance:
+模板指引：
 {templateBody}
 
-Return only JSON according to the required email schema.`,
+只返回符合邮件 schema 的 JSON。`,
 
-  [AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER]: `Write a follow-up email for a prospect who has not replied.
+  [AI_PROMPT_KEYS.EMAIL_FOLLOWUP_USER]: `写一封跟进邮件给尚未回复的客户。
 
-Prospect:
-- Name: {prospectName}
-- Company: {companyName}
-- Industry: {industry}
-- Country: {country}
+客户：
+- 姓名：{prospectName}
+- 公司：{companyName}
+- 行业：{industry}
+- 国家：{country}
 
-Sender:
-- Name: {senderName}
-- Title: {senderTitle}
-- Product/Service: {productName}
-- Product Description: {productDescription}
-- Value Proposition: {valueProposition}
+发件人：
+- 姓名：{senderName}
+- 职位：{senderTitle}
+- 产品/服务：{productName}
+- 产品描述：{productDescription}
+- 价值主张：{valueProposition}
 
-Previous email:
+上一封邮件：
 {previousEmailBody}
 
-Follow-up:
-- Step Number: {stepNumber}
-- Angle: {angle}
+跟进信息：
+- 跟进轮次：{stepNumber}
+- 切入角度：{angle}
 
-Return only JSON according to the required email schema.`,
+只返回符合邮件 schema 的 JSON。`,
 
-  [AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER]: `Write a warm reply-follow-up email based on a real prospect reply.
+  [AI_PROMPT_KEYS.EMAIL_REPLY_FOLLOWUP_USER]: `基于客户的真实回复，写一封跟进邮件。
 
-Prospect:
-- Name: {prospectName}
-- Company: {companyName}
-- Industry: {industry}
-- Country: {country}
-- Research: {researchSummary}
+客户：
+- 姓名：{prospectName}
+- 公司：{companyName}
+- 行业：{industry}
+- 国家：{country}
+- 调研信息：{researchSummary}
 
-Sender:
-- Name: {senderName}
-- Title: {senderTitle}
-- Product/Service: {productName}
-- Product Description: {productDescription}
-- Value Proposition: {valueProposition}
+发件人：
+- 姓名：{senderName}
+- 职位：{senderTitle}
+- 产品/服务：{productName}
+- 产品描述：{productDescription}
+- 价值主张：{valueProposition}
 
-Previous email:
+上一封邮件：
 {previousEmailBody}
 
-Prospect reply subject:
+客户回复主题：
 {replySubject}
 
-Prospect reply:
+客户回复内容：
 {replyBody}
 
-Return only JSON according to the required email schema.`,
+只返回符合邮件 schema 的 JSON。`,
 
-  [AI_PROMPT_KEYS.AGENT_PLANNER_SYSTEM]: `You are Hemera Cloud Agent's goal planner.
+  [AI_PROMPT_KEYS.AGENT_PLANNER_SYSTEM]: `你是 Hemera 云 Agent 的目标规划器。
 
-Return exactly ONE valid JSON object.
-Do not output markdown, explanations, hidden reasoning, or text before/after JSON.
-Only choose intent from the provided intent catalog.
-Do not choose concrete backend tools.
-Do not invent IDs or privileged parameters.`,
+只返回一个有效的 JSON 对象。
+不要输出 markdown、解释、隐藏推理或 JSON 前后的任何文字。
+只能从提供的意图目录中选择意图。
+不要选择具体的后端工具。
+不要编造 ID 或特权参数。`,
 
-  [AI_PROMPT_KEYS.AGENT_PLANNER_USER]: `You are Hemera Cloud Agent's planner. PitchFlow is only one business toolkit.
+  [AI_PROMPT_KEYS.AGENT_PLANNER_USER]: `你是 Hemera 云 Agent 的规划器。PitchFlow 只是其中一个业务工具包。
 
-Classify the user's request into a high-level business goal. Extract useful business facts into slots.
+将用户请求分类为高级业务目标。将有用的业务事实提取到参数槽中。
 
-Available intents:
+可用意图：
 {intentCatalog}
 
-User request:
+用户请求：
 {message}
 
-Return JSON with this exact shape:
+返回与此确切形状匹配的 JSON：
 {
-  "intent": "one intent from catalog",
+  "intent": "来自目录的一个意图",
   "slots": {},
   "confidence": 0.0,
-  "reply": "short user-facing Chinese reply"
+  "reply": "简短的中文回复"
 }
 
-Rules:
-- Do not choose backend tools.
-- For "下一步做什么", "接下来做什么", "现在该干嘛", "怎么推进", use intent "next_action".
-- Prefer action/workflow intent when the user says short action phrases like "挖掘客户", "找客户", "设置产品资料", "创建活动".
-- Use list/view intents only when the user explicitly asks to view, list, check status, progress, history, or statistics.
-- Extract obvious parameters into slots, but do not invent missing values.
-- For "帮我找 50 个美国宠物用品 DTC 品牌", use intent "start_discovery" and slots like {"keywords":["宠物用品 DTC 品牌"],"country":"United States","targetLimit":50}.
-- For product setup, extract companyName, productName, productDescription, valueProposition, senderName, senderTitle when present.
-- For ICP setup, extract targetCustomerText, mustHave, mustNotHave, productCategories, industry when present.
-- Do not output markdown.
-- Do not output explanations.
-- Do not output chain-of-thought.`,
+规则：
+- 不要选择后端工具。
+- 对于"下一步做什么"、"接下来做什么"、"现在该干嘛"、"怎么推进"，使用 intent "next_action"。
+- 当用户说简短的行动短语如"挖掘客户"、"找客户"、"设置产品资料"、"创建活动"时，优先使用 action/workflow 意图。
+- 仅当用户明确要求查看、列出、检查状态、进度、历史或统计数据时，才使用 list/view 意图。
+- 提取明显的参数到 slots 中，但不要编造缺失的值。
+- 对于"帮我找 50 个美国宠物用品 DTC 品牌"，使用 intent "start_discovery" 和 slots 如 {"keywords":["宠物用品 DTC 品牌"],"country":"United States","targetLimit":50}。
+- 对于产品资料设置，提取存在的 companyName、productName、productDescription、valueProposition、senderName、senderTitle。
+- 对于 ICP 设置，提取存在的 targetCustomerText、mustHave、mustNotHave、productCategories、industry。
+- 不要输出 markdown。
+- 不要输出解释。
+- 不要输出思维链。`,
 
-  [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_SYSTEM]: `You summarize PitchFlow tool execution results for users.
+  [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_SYSTEM]: `你为用户总结 PitchFlow 工具执行结果。
 
-Answer only in concise Chinese.
-Do not expose raw JSON.
-Do not output hidden reasoning, thinking process, markdown, or English analysis.
-Do not invent facts.
-If the result requires approval, failed, or is blocked, clearly state the next step.`,
+仅用简洁的中文回答。
+不要暴露原始 JSON。
+不要输出隐藏推理、思考过程、markdown 或英文分析。
+不要编造事实。
+如果结果需要审批、失败或被阻止，明确说明下一步操作。`,
 
-  [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_USER]: `Please summarize this Agent tool execution result for the user.
+  [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_USER]: `请为用户总结此 Agent 工具执行结果。
 
-User request:
+用户请求：
 {userMessage}
 
-Planner intent:
+规划器意图：
 {intent}
 
-Tool execution results:
+工具执行结果：
 {toolResults}
 
-Requirements:
-- Keep it under 120 Chinese characters.
-- Mention the important result and next step.
-- Do not expose raw JSON.
-- Do not invent information.`,
+要求：
+- 控制在 120 个中文字符以内。
+- 提及重要结果和下一步操作。
+- 不要暴露原始 JSON。
+- 不要编造信息。`,
+
+  [AI_PROMPT_KEYS.DISCOVERY_CLASSIFIER_SYSTEM]: `你是外贸获客 ICP 评估器。
+
+根据当前的挖掘模式（B2B/B2C/综合）评估一家海外公司是否值得开发。
+只能基于输入证据判断，不允许编造。
+如果证据不足，返回 needs_review。
+输出严格 JSON，不要 markdown。`,
+
+  [AI_PROMPT_KEYS.DISCOVERY_CLASSIFIER_USER]: `评估场景：{description}
+
+评估标准（按优先级从高到低）:
+1. 公司角色（最高优先）
+   b2b 模式：这家公司是海外进口商、批发商或分销商吗？
+   b2c 模式：这家公司是品牌商、零售商或 DTC 品牌吗？
+
+2. 商业匹配度
+   b2b 模式：有没有从中国/亚洲采购的迹象？如 import from China、global sourcing、OEM
+   b2c 模式：产品线是否匹配？有没有代工/贴牌/OEM 可能性？
+
+3. 商业规模
+   公司规模是否支持批量订单？员工数、办公地点、产品线广度
+
+4. 可触达性
+   有没有决策者线索？b2b 关注采购经理，b2c 关注创始人/品牌经理
+
+5. 产品匹配
+   产品线是否与供应品类匹配？
+
+加分项：international、export、global、multi-language
+减分项：local only、consumer direct only、B2C only
+
+公司信息：
+- 公司名称：{companyName}
+- 域名：{domain}
+- 首页内容：{homepageText}
+- 关于我们：{aboutText}
+- 产品页面：{productText}
+- 常见问题：{faqText}
+- 搜索摘要：{searchSnippet}
+- 检测器评分：{detectorScore}
+
+ICP 画像：{icpProfile}
+
+按以下 JSON 格式输出评分结果：
+{
+  "isTargetCustomer": true/false,
+  "confidence": 0-1,
+  "scores": {
+    "businessModelFit": 0-100,
+    "productFit": 0-100,
+    "salesModelFit": 0-100,
+    "exclusionRisk": 0-100
+  },
+  "matchedRequirements": ["匹配条件1"],
+  "rejectionReasons": ["拒绝原因"],
+  "evidence": [{"source": "about", "quote": "原文", "reason": "说明"}],
+  "recommendedDecision": "accepted | rejected | needs_review",
+  "reasoning": "评估理由",
+  "companyRole": "importer | distributor | wholesaler | brand | retailer | unknown"
+}`,
 };
 
 /**
@@ -545,6 +607,10 @@ function getPromptDescription(key: string): string {
       "数字员工工具结果总结系统提示词（控制总结口吻和安全边界）",
     [AI_PROMPT_KEYS.AGENT_RESULT_SUMMARY_USER]:
       "数字员工工具结果总结用户提示词模板（{userMessage}、{intent}、{toolResults} 会被替换）",
+    [AI_PROMPT_KEYS.DISCOVERY_CLASSIFIER_SYSTEM]:
+      "批量挖掘 AI 分类系统提示词（用于指导 AI 评估候选客户是否符合 ICP）",
+    [AI_PROMPT_KEYS.DISCOVERY_CLASSIFIER_USER]:
+      "批量挖掘 AI 分类用户提示词（包含评估标准和被评估公司的信息，{companyName} 等占位符会被替换）",
   };
   return descriptions[key] || "";
 }
