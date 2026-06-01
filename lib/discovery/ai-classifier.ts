@@ -52,7 +52,7 @@ export async function classifyCandidateWithAI(
   const provider = getAIProvider(providerName);
   const mode = input.discoveryMode || "mixed";
   const systemPrompt = getSystemPrompt(mode);
-  const prompt = buildClassifierPrompt(input, mode);
+  const prompt = buildClassifierPrompt(input);
   const roleDescription = getB2BOrB2CRoleInstruction(mode);
 
   let rawOutput: string;
@@ -68,7 +68,7 @@ export async function classifyCandidateWithAI(
   }
 
   try {
-    return normalizeAiOutput(parseJsonWithRepair<Partial<DiscoveryAiClassifyOutput>>(sanitize(rawOutput)), mode);
+    return normalizeAiOutput(parseJsonWithRepair<Partial<DiscoveryAiClassifyOutput>>(sanitize(rawOutput)));
   } catch {
     return fallbackAiOutput(rawOutput);
   }
@@ -173,7 +173,7 @@ function getB2BOrB2CRoleInstruction(mode: string): string {
   ].join("\n");
 }
 
-function buildClassifierPrompt(input: DiscoveryAiClassifyInput, mode: string) {
+function buildClassifierPrompt(input: DiscoveryAiClassifyInput) {
   return JSON.stringify(
     {
       task: "Classify whether this company matches the ICP profile.",
@@ -221,8 +221,7 @@ function sanitize(value: string) {
 }
 
 function normalizeAiOutput(
-  output: Partial<DiscoveryAiClassifyOutput>,
-  mode: string
+  output: Partial<DiscoveryAiClassifyOutput>
 ): DiscoveryAiClassifyOutput {
   return {
     isTargetCustomer: Boolean(output.isTargetCustomer),
