@@ -11,13 +11,15 @@ export function buildDiscoveryQueries(
   icpProfile: Pick<
     DiscoveryIcpProfile,
     "industry" | "positiveKeywords" | "productCategories" | "salesModel" | "mustHave"
-  >
+  >,
+  discoveryMode?: "b2b" | "b2c" | "mixed"
 ): DiscoveryExpandedQuery[] {
   const baseTerms = collectBaseTerms(job, icpProfile);
   const geoTerms = collectGeoTerms(job);
   const hintTerms = hasChinese(baseTerms.join(" ")) ? CHINESE_HINTS : ENGLISH_HINTS;
   const productTerms = collectProductTerms(icpProfile, baseTerms);
-  const intentQueries = buildIntentQueries(baseTerms, geoTerms, hintTerms, productTerms, icpProfile);
+  const mode = discoveryMode || "mixed";
+  const intentQueries = buildIntentQueries(baseTerms, geoTerms, hintTerms, productTerms, icpProfile, mode);
   return dedupeQueries(intentQueries).slice(0, MAX_EXPANDED_QUERIES);
 }
 
@@ -26,9 +28,10 @@ export function buildDiscoveryQueryStrings(
   icpProfile: Pick<
     DiscoveryIcpProfile,
     "industry" | "positiveKeywords" | "productCategories" | "salesModel" | "mustHave"
-  >
+  >,
+  discoveryMode?: "b2b" | "b2c" | "mixed"
 ) {
-  return buildDiscoveryQueries(job, icpProfile).map((item) => item.query);
+  return buildDiscoveryQueries(job, icpProfile, discoveryMode).map((item) => item.query);
 }
 
 function collectBaseTerms(
@@ -69,16 +72,33 @@ function buildIntentQueries(
   geoTerms: string[],
   hintTerms: string[],
   productTerms: string[],
-  icpProfile: Pick<DiscoveryIcpProfile, "industry" | "salesModel" | "mustHave" | "positiveKeywords">
+  icpProfile: Pick<DiscoveryIcpProfile, "industry" | "salesModel" | "mustHave" | "positiveKeywords">,
+  discoveryMode: "b2b" | "b2c" | "mixed"
 ) {
   const queries: DiscoveryExpandedQuery[] = [];
+
+  // 通用意图（所有模式共享）
   addProductQueries(queries, productTerms, geoTerms, icpProfile.industry);
   addBrandQueries(queries, productTerms, geoTerms, icpProfile.industry);
-  addDtcQueries(queries, productTerms, geoTerms, icpProfile);
   addOfficialSiteQueries(queries, productTerms, geoTerms, hintTerms);
-  addPlatformQueries(queries, productTerms);
   addProblemSceneQueries(queries, icpProfile.mustHave || [], icpProfile.positiveKeywords || []);
   addQuery(queries, "broad", mergeParts([...baseTerms.slice(0, 2), ...geoTerms, hintTerms[0]]), 70);
+
+  // B2B 专用意图
+  if (discoveryMode === "b2b" || discoveryMode === "mixed") {
+    addB2BImporterQueries(queries, productTerms, geoTerms);
+    addB2BWholesaleQueries(queries, productTerms, geoTerms);
+    addB2BSourcingQueries(queries, baseTerms, productTerms);
+    addB2BDistributorQueries(queries, productTerms, geoTerms);
+    addB2BTradeQueries(queries, productTerms, geoTerms);
+  }
+
+  // B2C/DTC 专用意图
+  if (discoveryMode === "b2c" || discoveryMode === "mixed") {
+    addDtcQueries(queries, productTerms, geoTerms, icpProfile);
+    addPlatformQueries(queries, productTerms);
+  }
+
   return queries;
 }
 
@@ -144,6 +164,73 @@ function addProblemSceneQueries(
   for (const sceneTerm of sceneTerms) {
     addQuery(queries, "problem_scene", mergeParts([sceneTerm, "brand"]), 68);
   }
+}
+
+/**
+ * B2B 进口商查询: "importer of {product} in {country}"
+ */
+function addB2BImporterQueries(
+  queries: DiscoveryExpandedQuery[],
+  productTerms: string[],
+  geoTerms: string[]
+) {
+  for (const term of productTerms.slice(0, 2)) {
+    addQuery(queries, "importer", mergeParts(["importer of", term, "in", ...geoTerms]), 100);
+    addQuery(queries, "importer", mergeParts([term, "import", ...geoTerms]), 95);
+  }
+}
+
+/**
+ * B2B 批发商查询: "{product} wholesale {country}"
+ */
+function addB2BWholesaleQueries(
+  queries: DiscoveryExpandedQuery[],
+  productTerms: string[],
+  geoTerms: string[]
+) {
+  for (const term of productTerms.slice(0, 2)) {
+    addQuery(queries, "wholesale", mergeParts([term, "wholesale", ...geoTerms]), 95);
+    addQuery(queries, "wholesale", mergeParts([term, "bulk buy", ...geoTerms]), 88);
+  }
+}
+
+/**
+ * B2B 采购查询: "buy {product} from China"
+ */
+function addB2BSourcingQueries(
+  queries: DiscoveryExpandedQuery[],
+  baseTerms: string[],
+  productTerms: string[]
+) {
+  addQuery(queries, "sourcing", mergeParts(["buy", productTerms[0], "from China supplier"]), 90);
+  addQuery(queries, "sourcing", mergeParts(["source", productTerms[0], "from Asia"]), 85);
+  addQuery(queries, "sourcing", mergeParts(["OEM", productTerms[0], "manufacturer", ...baseTerms.slice(0, 1)]), 80);
+}
+
+/**
+ * B2B 分销商查询: "{product} distributor {country}"
+ */
+function addB2BDistributorQueries(
+  queries: DiscoveryExpandedQuery[],
+  productTerms: string[],
+  geoTerms: string[]
+) {
+  for (const term of productTerms.slice(0, 2)) {
+    addQuery(queries, "distributor", mergeParts([term, "distributor", ...geoTerms]), 90);
+    addQuery(queries, "distributor", mergeParts([term, "supplier", ...geoTerms]), 85);
+  }
+}
+
+/**
+ * B2B 贸易公司查询: "trade {product} company {country}"
+ */
+function addB2BTradeQueries(
+  queries: DiscoveryExpandedQuery[],
+  productTerms: string[],
+  geoTerms: string[]
+) {
+  addQuery(queries, "trade", mergeParts(["trade", productTerms[0], "company", ...geoTerms]), 85);
+  addQuery(queries, "trade", mergeParts([productTerms[0], "procurement", ...geoTerms]), 80);
 }
 
 function addQuery(

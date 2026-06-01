@@ -28,6 +28,7 @@ export default function NewDiscoveryJobPage() {
   const { toast } = useToast();
   const [profiles, setProfiles] = useState<IcpProfile[]>([]);
   const [icpProfileId, setIcpProfileId] = useState<string>("none");
+  const [discoveryMode, setDiscoveryMode] = useState<string>("mixed");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function NewDiscoveryJobPage() {
             .map((line) => line.trim())
             .filter(Boolean),
           targetLimit: Number(formData.get("targetLimit") || 50),
+          discoveryMode: discoveryMode === "mixed" ? undefined : discoveryMode,
         }),
       });
 
@@ -147,6 +149,34 @@ export default function NewDiscoveryJobPage() {
             <div className="space-y-2">
               <Label htmlFor="targetLimit">目标数量</Label>
               <Input id="targetLimit" name="targetLimit" type="number" min={1} max={200} defaultValue={50} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>挖掘模式</Label>
+              <Select value={discoveryMode} onValueChange={setDiscoveryMode}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="b2b">
+                    <span className="font-medium">B2B 外贸</span>
+                    <span className="ml-2 text-xs text-muted-foreground">找海外进口商、批发商、分销商</span>
+                  </SelectItem>
+                  <SelectItem value="b2c">
+                    <span className="font-medium">B2C/DTC 品牌</span>
+                    <span className="ml-2 text-xs text-muted-foreground">找海外品牌商、零售商</span>
+                  </SelectItem>
+                  <SelectItem value="mixed">
+                    <span className="font-medium">综合模式</span>
+                    <span className="ml-2 text-xs text-muted-foreground">两者兼顾，推荐</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {discoveryMode === "b2b" && "搜索进口商/批发商/分销商相关关键词，AI 优先评估采购潜力"}
+                {discoveryMode === "b2c" && "搜索品牌商/零售商相关关键词，AI 优先评估合作潜力"}
+                {discoveryMode === "mixed" && "同时使用两种策略搜索和评分，覆盖面最广"}
+              </p>
             </div>
 
             <Button type="submit" disabled={submitting}>

@@ -110,6 +110,7 @@ export async function createDiscoveryJob(
       targetLimit: input.targetLimit,
       filters: input.filters,
       inputQuery: input.keywords.join(", "),
+      discoveryMode: input.discoveryMode,
     })
     .returning();
 

@@ -19,21 +19,52 @@ export function calculateDiscoveryDecision(input: {
   feedbackScore: number;
   icpProfile: DiscoveryIcpProfile;
   blocked: boolean;
+  discoveryMode?: "b2b" | "b2c" | "mixed";
 }): DiscoveryDecisionResult {
   if (input.blocked) return toDecisionResult(-100, "blacklisted", input.feedbackScore);
   if (input.ruleResult.hardReject) return toDecisionResult(0, "rejected", input.feedbackScore);
 
   const finalScore = calculateFinalScore(input);
-  if (hasUncertainSource(input.ruleResult) && finalScore >= input.icpProfile.minScoreToReview) {
+  const mode = input.discoveryMode || "mixed";
+
+  // 按场景使用不同的阈值：B2B 场景更宽松，避免错过潜在客户
+  const [minScoreToSave, minScoreToReview] = getThresholds(input.icpProfile, mode);
+
+  if (hasUncertainSource(input.ruleResult) && finalScore >= minScoreToReview) {
     return toDecisionResult(finalScore, "needs_review", input.feedbackScore);
   }
-  if (finalScore >= input.icpProfile.minScoreToSave) {
+  if (finalScore >= minScoreToSave) {
     return toDecisionResult(finalScore, "accepted", input.feedbackScore);
   }
-  if (finalScore >= input.icpProfile.minScoreToReview) {
+  if (finalScore >= minScoreToReview) {
     return toDecisionResult(finalScore, "needs_review", input.feedbackScore);
   }
   return toDecisionResult(finalScore, "rejected", input.feedbackScore);
+}
+
+/**
+ * 按场景获取评分阈值
+ * B2B: 更宽松（外贸客户宁愿多审也不愿错过）
+ * B2C: 标准阈值
+ * mixed: 使用 ICP 默认值
+ */
+function getThresholds(
+  icpProfile: DiscoveryIcpProfile,
+  discoveryMode: "b2b" | "b2c" | "mixed"
+): [number, number] {
+  const defaultSave = icpProfile.minScoreToSave;
+  const defaultReview = icpProfile.minScoreToReview;
+
+  // 如果 ICP 已经自定义了阈值，优先使用
+  if (defaultSave !== 80 || defaultReview !== 60) {
+    return [defaultSave, defaultReview];
+  }
+
+  if (discoveryMode === "b2b") {
+    return [Math.min(defaultSave, 70), Math.min(defaultReview, 50)];
+  }
+
+  return [defaultSave, defaultReview];
 }
 
 export function calculateFinalScore(input: {

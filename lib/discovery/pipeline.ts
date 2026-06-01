@@ -75,26 +75,37 @@ async function ensureAiModelConfigured() {
 
 export async function runDiscoveryPipeline(jobId: string) {
   const context = await loadContext(jobId);
+  const discoveryMode = resolveDiscoveryMode(context);
   await markJobStarted(context.job.id);
   await ensureJobActive(context.job.id);
 
   // 提前检查 AI 模型是否已配置，避免执行到评分阶段才失败
   await ensureAiModelConfigured();
 
-  const queries = buildDiscoveryQueries(context.job, context.icpProfile || emptyProfile(context.job));
+  const queries = buildDiscoveryQueries(context.job, context.icpProfile || emptyProfile(context.job), discoveryMode);
   const detectedCandidates = await collectDetectedCandidates(context, queries);
   await updateSearchProgress(context.job.id, detectedCandidates.length);
   await ensureJobActive(context.job.id);
 
-  const enrichedCandidates = await enrichCandidates(context, detectedCandidates);
+  // 地域硬过滤：跳过非目标国家的候选
+  const countryFilteredCandidates = await filterCandidatesByCountry(context, detectedCandidates);
+
+  const enrichedCandidates = await enrichCandidates(context, countryFilteredCandidates);
   await updateCrawlProgress(context.job.id, enrichedCandidates.length);
   await ensureJobActive(context.job.id);
 
-  const scoredCandidates = await scoreCandidates(context, enrichedCandidates);
+  const scoredCandidates = await scoreCandidates(context, enrichedCandidates, discoveryMode);
   const persistedCandidates = await persistCandidates(context, scoredCandidates);
   const savedCount = await autoSaveCandidates(context, persistedCandidates);
 
   return finalizeJob(context, persistedCandidates, savedCount);
+}
+
+/**
+ * 解析 discoveryMode: 优先使用 ICP 画像中的配置，否则默认为 mixed
+ */
+function resolveDiscoveryMode(context: PipelineContext): "b2b" | "b2c" | "mixed" {
+  return context.icpProfile?.discoveryMode || context.job.discoveryMode || "mixed";
 }
 
 async function loadContext(jobId: string): Promise<PipelineContext> {
@@ -136,11 +147,11 @@ async function collectDetectedCandidates(context: PipelineContext, queries: Disc
   const mergedCandidates = new Map<string, DiscoveryNormalizedCandidate>();
   const searchResults = await searchDiscoverySources({
     queries,
-    targetLimit: context.job.targetLimit,
+    targetLimit: Math.max(context.job.targetLimit, 20),
     country: context.job.country,
     icpProfile: context.icpProfile,
   });
-  const detectorResults = await detectSearchResults(searchResults, context.job.targetLimit);
+  const detectorResults = await detectSearchResults(searchResults);
   const searchResultMap = mapSearchResultsByLink(searchResults);
 
   for (const detectorCandidate of detectorResults) {
@@ -149,13 +160,13 @@ async function collectDetectedCandidates(context: PipelineContext, queries: Disc
     if (!normalizedCandidate) continue;
     mergeCandidate(mergedCandidates, normalizedCandidate);
   }
-  return Array.from(mergedCandidates.values()).slice(0, context.job.targetLimit * 3);
+  return Array.from(mergedCandidates.values());
 }
 
-async function detectSearchResults(searchResults: DiscoverySearchResult[], targetLimit: number) {
+async function detectSearchResults(searchResults: DiscoverySearchResult[]) {
   if (searchResults.length === 0) return [];
   const detectorInput = searchResults
-    .slice(0, targetLimit * 3)
+    .slice(0, 50)
     .map(({ title, link, snippet }) => ({ title, link, snippet }));
   const detectorResult = await detectOfficialWebsite("multi-source-discovery", detectorInput, await getDetectorConfig());
   return detectorResult.allCandidates;
@@ -200,6 +211,94 @@ function toNormalizedCandidate(
     decision: "pending" as const,
     metadata: buildSearchMetadata(detectorCandidate, searchResult),
   };
+}
+
+/**
+ * 地域硬过滤: 如果 ICP 指定了目标国家，跳过明显不属于该国家的候选
+ * 通过 TLD、页面语言、根域名特征来粗略判断
+ */
+async function filterCandidatesByCountry(
+  context: PipelineContext,
+  candidates: DiscoveryNormalizedCandidate[]
+) {
+  const targetCountry = context.job.country || null;
+  if (!targetCountry) return candidates;
+
+  const countryCode = getCountryCode(targetCountry);
+  if (!countryCode) return candidates;
+
+  const filtered = candidates.filter((candidate) => {
+    try {
+      // 通过 TLD 判断: .cn → 中国, .jp → 日本
+      const domain = candidate.domain || "";
+      const tld = domain.split(".").pop()?.toLowerCase() || "";
+
+      // 如果域名是目标国家的 TLD，保留
+      if (isTldForCountry(tld, countryCode)) return true;
+
+      // 如果域名是国内 TLD，跳过（中国品牌不会是美国进口商）
+      if (isHomeCountryTld(tld)) return false;
+
+      // TLD 不明确时（.com/.org/.net），保留让后续检测器判断
+      return true;
+    } catch {
+      return true;
+    }
+  });
+
+  return filtered;
+}
+
+/** 常见国家 TLD 映射 */
+function getCountryCode(countryName: string): string | null {
+  const map: Record<string, string> = {
+    "united states": "us",
+    "usa": "us",
+    "us": "us",
+    "american": "us",
+    "united kingdom": "uk",
+    "uk": "uk",
+    "britain": "uk",
+    "england": "uk",
+    "germany": "de",
+    "german": "de",
+    "france": "fr",
+    "french": "fr",
+    "japan": "jp",
+    "japanese": "jp",
+    "australia": "au",
+    "canada": "ca",
+    "china": "cn",
+    "china mainland": "cn",
+    "hong kong": "hk",
+    "korea": "kr",
+    "south korea": "kr",
+    "india": "in",
+    "brazil": "br",
+    "italy": "it",
+    "spain": "es",
+    "netherlands": "nl",
+    "switzerland": "ch",
+    "sweden": "se",
+    "singapore": "sg",
+    "uae": "ae",
+    "united arab emirates": "ae",
+    "russia": "ru",
+    "mexico": "mx",
+  };
+  return map[countryName.toLowerCase().trim()] || null;
+}
+
+/** 判断 TLD 是否匹配目标国家 */
+function isTldForCountry(tld: string, countryCode: string): boolean {
+  if (countryCode === "uk") return tld === "uk" || tld === "co.uk" || tld === "london";
+  if (countryCode === "us") return tld === "us";
+  return tld === countryCode;
+}
+
+/** 判断 TLD 是否属于"国内"(中国)，这些域名的公司不太可能是海外进口商 */
+function isHomeCountryTld(tld: string): boolean {
+  return ["cn", "com.cn", "net.cn", "org.cn"].includes(tld);
 }
 
 function buildSearchMetadata(detectorCandidate: DetectorCandidate, searchResult?: DiscoverySearchResult) {
@@ -354,14 +453,14 @@ async function updateCrawlProgress(jobId: string, crawledCount: number) {
     .where(eq(leadDiscoveryJobs.id, jobId));
 }
 
-async function scoreCandidates(context: PipelineContext, candidates: DiscoveryNormalizedCandidate[]) {
+async function scoreCandidates(context: PipelineContext, candidates: DiscoveryNormalizedCandidate[], discoveryMode: "b2b" | "b2c" | "mixed") {
   const aiBudget = Math.min(context.job.targetLimit * 3, 100);
   const scoredCandidates: WorkingCandidate[] = [];
   let aiCalls = 0;
 
   for (const candidate of candidates) {
     await ensureJobActive(context.job.id);
-    const scoredCandidate = await scoreCandidate(context, candidate, aiCalls < aiBudget);
+    const scoredCandidate = await scoreCandidate(context, candidate, aiCalls < aiBudget, discoveryMode);
     if (scoredCandidate.aiResult) aiCalls += 1;
     scoredCandidates.push(scoredCandidate);
   }
@@ -377,12 +476,13 @@ async function scoreCandidates(context: PipelineContext, candidates: DiscoveryNo
 async function scoreCandidate(
   context: PipelineContext,
   candidate: DiscoveryNormalizedCandidate,
-  allowAi: boolean
+  allowAi: boolean,
+  discoveryMode: "b2b" | "b2c" | "mixed"
 ): Promise<WorkingCandidate> {
   const icpProfile = context.icpProfile || emptyProfile(context.job);
-  const ruleResult = runRuleFilter({ candidate: buildRuleCandidate(candidate), icpProfile });
+  const ruleResult = runRuleFilter({ candidate: buildRuleCandidate(candidate), icpProfile, discoveryMode });
   const aiResult = allowAi && shouldRunAi(candidate, ruleResult)
-    ? await classifyCandidate(candidate, icpProfile)
+    ? await classifyCandidate(candidate, icpProfile, discoveryMode)
     : null;
 
   const history = candidate.metadata.history as { blocked?: boolean } | undefined;
@@ -393,6 +493,7 @@ async function scoreCandidate(
     feedbackScore: candidate.feedbackScore,
     icpProfile,
     blocked: Boolean(history?.blocked),
+    discoveryMode,
   });
 
   return {
@@ -422,7 +523,8 @@ function shouldRunAi(candidate: DiscoveryNormalizedCandidate, ruleResult: Return
 
 async function classifyCandidate(
   candidate: DiscoveryNormalizedCandidate,
-  icpProfile: DiscoveryIcpProfile
+  icpProfile: DiscoveryIcpProfile,
+  discoveryMode: "b2b" | "b2c" | "mixed"
 ) {
   const pageTexts = splitPageTexts(candidate.pagesFetched);
   return classifyCandidateWithAI({
@@ -436,6 +538,7 @@ async function classifyCandidate(
     detectorScore: candidate.detectorScore,
     detectorDimensions: candidate.detectorDimensions,
     icpProfile,
+    discoveryMode,
   });
 }
 
@@ -788,6 +891,7 @@ function mapJob(jobRow: typeof leadDiscoveryJobs.$inferSelect): DiscoveryJobReco
     rejectedCount: jobRow.rejectedCount,
     savedCount: jobRow.savedCount,
     progress: jobRow.progress,
+    discoveryMode: (jobRow as Record<string, unknown>).discoveryMode as "b2b" | "b2c" | "mixed" | undefined,
   };
 }
 
@@ -810,6 +914,7 @@ function mapIcpProfile(profileRow: typeof icpProfiles.$inferSelect): DiscoveryIc
     minScoreToSave: profileRow.minScoreToSave,
     minScoreToReview: profileRow.minScoreToReview,
     promptTemplate: profileRow.promptTemplate,
+    discoveryMode: (profileRow as Record<string, unknown>).discoveryMode as "b2b" | "b2c" | "mixed" | undefined,
   };
 }
 

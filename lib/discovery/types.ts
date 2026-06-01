@@ -36,6 +36,7 @@ export interface DiscoveryIcpProfile {
   minScoreToSave: number;
   minScoreToReview: number;
   promptTemplate?: string | null;
+  discoveryMode?: "b2b" | "b2c" | "mixed";
 }
 
 export interface DiscoveryJobRecord {
@@ -67,6 +68,7 @@ export interface DiscoveryJobRecord {
   rejectedCount: number;
   savedCount: number;
   progress: number;
+  discoveryMode?: "b2b" | "b2c" | "mixed";
 }
 
 export interface DiscoverySearchCandidate {
@@ -115,6 +117,7 @@ export interface DiscoveryRuleFilterInput {
   > & { rawText: string; pagesFetched: DiscoveryFetchedPage[] };
   icpProfile: DiscoveryIcpProfile;
   ruleVariant?: "A" | "B";
+  discoveryMode?: "b2b" | "b2c" | "mixed";
 }
 
 export interface DiscoveryRuleFilterResult {
@@ -136,6 +139,7 @@ export interface DiscoveryAiClassifyInput {
   detectorScore: number;
   detectorDimensions: Record<string, number>;
   icpProfile: DiscoveryIcpProfile;
+  discoveryMode?: "b2b" | "b2c" | "mixed";
 }
 
 export interface DiscoveryAiClassifyOutput {
@@ -152,6 +156,7 @@ export interface DiscoveryAiClassifyOutput {
   evidence: DiscoveryEvidence[];
   recommendedDecision: "accepted" | "rejected" | "needs_review";
   reasoning: string;
+  companyRole?: "importer" | "distributor" | "wholesaler" | "brand" | "retailer" | "unknown";
 }
 
 export interface DiscoveryHistorySignals {

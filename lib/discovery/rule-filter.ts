@@ -33,10 +33,56 @@ const UNCERTAIN_SOURCE_SIGNALS = [
   "influencer page",
 ];
 
+/** B2B 场景加权信号：进口商/批发商/分销商特征 */
+const B2B_WEIGHTED_WORDS: Array<{ word: string; weight: number }> = [
+  { word: "import", weight: 15 },
+  { word: "importer", weight: 15 },
+  { word: "importing", weight: 15 },
+  { word: "wholesale", weight: 15 },
+  { word: "wholesaler", weight: 15 },
+  { word: "distributor", weight: 14 },
+  { word: "distribution", weight: 12 },
+  { word: "OEM", weight: 14 },
+  { word: "ODM", weight: 14 },
+  { word: "procurement", weight: 12 },
+  { word: "purchasing", weight: 10 },
+  { word: "sourcing", weight: 12 },
+  { word: "supplier", weight: 10 },
+  { word: "vendor", weight: 10 },
+  { word: "export", weight: 8 },
+  { word: "international", weight: 6 },
+  { word: "global sourcing", weight: 14 },
+  { word: "trade", weight: 6 },
+  { word: "bulk", weight: 8 },
+  { word: "volume", weight: 6 },
+  { word: "manufacturer", weight: 6 },
+  { word: "factory", weight: 4 },
+  { word: "multi language", weight: 8 },
+];
+
+/** B2C/DTC 场景加权信号：品牌/零售商特征 */
+const B2C_WEIGHTED_WORDS: Array<{ word: string; weight: number }> = [
+  { word: "brand", weight: 12 },
+  { word: "brands", weight: 12 },
+  { word: "shop", weight: 10 },
+  { word: "store", weight: 10 },
+  { word: "online shop", weight: 10 },
+  { word: "DTC", weight: 12 },
+  { word: "direct to consumer", weight: 12 },
+  { word: "boutique", weight: 6 },
+  { word: "retail", weight: 8 },
+  { word: "retailer", weight: 8 },
+  { word: "ecommerce", weight: 8 },
+  { word: "e-commerce", weight: 8 },
+  { word: "subscribe", weight: 4 },
+  { word: "lifestyle", weight: 4 },
+];
+
 export function runRuleFilter({
   candidate,
   icpProfile,
   ruleVariant,
+  discoveryMode,
 }: DiscoveryRuleFilterInput): DiscoveryRuleFilterResult {
   const activeVariant = resolveRuleVariant(ruleVariant);
   const searchableText = buildSearchableText(candidate);
@@ -53,6 +99,15 @@ export function runRuleFilter({
   ruleScore += scoreProductCategories(icpProfile.productCategories, searchableText, matchedRules, evidence);
   if (activeVariant === "B") {
     ruleScore -= scoreUncertainSourceSignals(searchableText, rejectReasons, evidence);
+  }
+
+  // B2B/B2C 场景加权信号
+  const mode = discoveryMode || "mixed";
+  if (mode === "b2b" || mode === "mixed") {
+    ruleScore += scoreScenarioSignals(searchableText, B2B_WEIGHTED_WORDS, matchedRules, evidence, "b2b");
+  }
+  if (mode === "b2c" || mode === "mixed") {
+    ruleScore += scoreScenarioSignals(searchableText, B2C_WEIGHTED_WORDS, matchedRules, evidence, "b2c");
   }
 
   return {
@@ -156,6 +211,26 @@ function scoreUncertainSourceSignals(
     pushEvidence(evidence, "source_quality", searchableText, signal, "source is not clearly an official target company site");
     return score + 40;
   }, 0);
+}
+
+/**
+ * B2B/B2C 场景加权评分
+ */
+function scoreScenarioSignals(
+  searchableText: string,
+  weightedWords: Array<{ word: string; weight: number }>,
+  matchedRules: string[],
+  evidence: DiscoveryEvidence[],
+  scenario: string
+) {
+  let score = 0;
+  for (const { word, weight } of weightedWords) {
+    if (!containsKeyword(searchableText, word)) continue;
+    matchedRules.push(`${scenario}:${normalizeKeyword(word)}`);
+    pushEvidence(evidence, scenario, searchableText, word, `matches ${scenario} scenario signal`);
+    score += weight;
+  }
+  return score;
 }
 
 function containsKeyword(searchableText: string, keyword: string) {

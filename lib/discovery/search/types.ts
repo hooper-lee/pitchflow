@@ -5,7 +5,12 @@ export type DiscoveryQueryIntent =
   | "official_site"
   | "platform"
   | "problem_scene"
-  | "broad";
+  | "broad"
+  | "importer"
+  | "wholesale"
+  | "sourcing"
+  | "distributor"
+  | "trade";
 
 export interface DiscoveryExpandedQuery {
   query: string;

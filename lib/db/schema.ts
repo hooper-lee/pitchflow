@@ -661,6 +661,7 @@ export const leadDiscoveryJobs = pgTable(
     savedCount: integer("saved_count").default(0).notNull(),
     progress: integer("progress").default(0).notNull(),
     errorMessage: text("error_message"),
+    discoveryMode: varchar("discovery_mode", { length: 10 }),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -51,6 +51,7 @@ export const createDiscoveryJobSchema = z.object({
   keywords: z.array(z.string().min(1)).min(1).max(20),
   targetLimit: z.number().int().min(1).max(200).default(50),
   filters: z.record(z.string(), z.unknown()).default({}),
+  discoveryMode: z.enum(["b2b", "b2c"]).optional(),
 });
 
 export const discoveryJobListSchema = z.object({
